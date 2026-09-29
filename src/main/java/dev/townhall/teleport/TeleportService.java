@@ -3,6 +3,7 @@ package dev.townhall.teleport;
 import dev.townhall.TownhallMod;
 import dev.townhall.config.TownhallConfig;
 import dev.townhall.config.TownhallConfig.Location;
+import dev.townhall.onboarding.Onboarding;
 import dev.townhall.storage.PlayerState;
 import dev.townhall.storage.ReturnLocation;
 import dev.townhall.storage.ReturnPositionStorage;
@@ -56,10 +57,14 @@ public final class TeleportService {
 		ReturnLocation before = ReturnLocation.of(player);
 		if (!teleportToSpawn(player, location)) return EnterResult.FAILED;
 
-		PlayerState next = inLocationWorld ? state : state.withReturnPosition(before);
+		// Keep an existing return position while the player is at a location, also if that location was moved to another
+		// world meanwhile (then the world they leave is no longer a location world, but it isn't their home either).
+		boolean keepReturn = inLocationWorld || (state.returnPosition().isPresent() && state.location().isPresent());
+		PlayerState next = keepReturn ? state : state.withReturnPosition(before);
 		// Operators are never locked in (also when they send themselves); everyone else is, if the location isn't escapable.
 		boolean confined = !location.isEscapable() && !TownhallMod.isOperator(player.permissions());
 		storage.set(player.getUUID(), next.withStay(locationId, confined, durationMillis));
+		resendCommands(player);
 		Text.title(player, location.title, location.subtitle);
 		if (config.debugLogging) TownhallMod.LOGGER.info("{} was sent to {} from {}", player.getPlainTextName(), locationId, before);
 		return EnterResult.SENT;
@@ -100,6 +105,7 @@ public final class TeleportService {
 			return ReturnResult.FAILED;
 		}
 		storage.set(player.getUUID(), config.returnSettings.clearAfterSuccessfulReturn ? PlayerState.EMPTY : state.left());
+		resendCommands(player);
 		return result;
 	}
 
@@ -152,7 +158,14 @@ public final class TeleportService {
 		if (ok) {
 			player.setDeltaMovement(Vec3.ZERO);
 			player.resetFallDistance();
+			// A player who hasn't accepted the rules yet is kept here now, not pulled back to where they joined.
+			Onboarding.moved(player);
 		}
 		return ok;
+	}
+
+	/** Command visibility depends on the stored state (return at adminOnly locations), so resend the tree after it changed. */
+	public static void resendCommands(ServerPlayer player) {
+		player.level().getServer().getCommands().sendCommands(player);
 	}
 }

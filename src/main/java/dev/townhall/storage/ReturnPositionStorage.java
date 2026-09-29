@@ -68,6 +68,23 @@ public final class ReturnPositionStorage extends SavedData {
 		return states.values().stream().filter(PlayerState::confined).count();
 	}
 
+	/**
+	 * The location became escapable: everyone confined there is free to leave. Return position, location and a running
+	 * timer stay, so return works and a timed stay still ends on its own. Returns how many were freed.
+	 */
+	public int releaseConfinedAt(String locationId) {
+		int released = 0;
+		for (Map.Entry<UUID, PlayerState> e : states.entrySet()) {
+			PlayerState s = e.getValue();
+			if (s.confined() && s.location().map(locationId::equals).orElse(false)) {
+				e.setValue(new PlayerState(s.returnPosition(), s.location(), false, s.remainingMillis()));
+				released++;
+			}
+		}
+		if (released > 0) setDirty();
+		return released;
+	}
+
 	/** Players that are confined or have a timer. A copy, so callers may change states while iterating. */
 	public List<UUID> activePlayers() {
 		return states.entrySet().stream().filter(e -> e.getValue().isActive()).map(Map.Entry::getKey).toList();

@@ -37,10 +37,24 @@ public final class Onboarding {
 		return cfg.enabled && OnboardingStorage.get(player.level().getServer()).acceptedVersion(player.getUUID()) < cfg.rulesVersion;
 	}
 
-	/** Blocked from playing: hasn't accepted yet, restrictions are on, and not an operator. Cheap: a map lookup. */
+	/**
+	 * Blocked from playing: hasn't accepted the current rules yet, onboarding and restrictions are on, and not an operator.
+	 * Cheap for everyone who isn't pending (a map lookup); the config is read again, so turning onboarding off or lowering
+	 * rulesVersion (+ reload) frees pending players at once.
+	 */
 	public static boolean isRestricted(ServerPlayer player) {
 		return PENDING.containsKey(player.getUUID()) && TownhallMod.CONFIG.get().onboarding.restrictUntilAccepted
-				&& !TownhallMod.isOperator(player.permissions());
+				&& !TownhallMod.isOperator(player.permissions()) && needsToAccept(player);
+	}
+
+	/** Joined without having accepted the rules and hasn't accepted since (online players only). */
+	public static boolean isPending(UUID player) {
+		return PENDING.containsKey(player);
+	}
+
+	/** The mod teleported a pending player (e.g. an operator sent them to the prison): keep them at the new spot. */
+	public static void moved(ServerPlayer player) {
+		PENDING.computeIfPresent(player.getUUID(), (id, p) -> new Pending(player.level(), player.position(), p.lastReminder()));
 	}
 
 	public static void onJoin(ServerPlayer player) {
@@ -84,9 +98,9 @@ public final class Onboarding {
 	/** Returns false if there was nothing to accept. */
 	public static boolean accept(ServerPlayer player) {
 		TownhallConfig.Onboarding cfg = TownhallMod.CONFIG.get().onboarding;
+		PENDING.remove(player.getUUID()); // also when there is nothing to accept (anymore), so nobody stays pending
 		if (!needsToAccept(player)) return false;
 		OnboardingStorage.get(player.level().getServer()).accept(player.getUUID(), cfg.rulesVersion);
-		PENDING.remove(player.getUUID());
 		player.sendSystemMessage(Text.of(cfg.accepted));
 		Text.title(player, cfg.acceptedTitle, "");
 		TownhallMod.LOGGER.info("{} accepted the rules (version {})", player.getPlainTextName(), cfg.rulesVersion);
@@ -111,6 +125,10 @@ public final class Onboarding {
 			ServerPlayer player = server.getPlayerList().getPlayer(e.getKey());
 			if (player == null) {
 				PENDING.remove(e.getKey());
+				continue;
+			}
+			if (!needsToAccept(player)) {
+				PENDING.remove(e.getKey()); // onboarding turned off or rulesVersion lowered
 				continue;
 			}
 			if (!isRestricted(player)) continue;

@@ -78,7 +78,7 @@ public final class ActivityCommands {
 	static int setAfkTime(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
 		TownhallMod.CONFIG.get().afkMinutes = minutes;
-		TownhallMod.CONFIG.save();
+		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
 		ctx.getSource().sendSuccess(() -> Component.literal(minutes == 0 ? "Automatic AFK is off (only /afk)." : "Players are AFK after " + minutes + " minutes without activity.")
 				.withStyle(ChatFormatting.GREEN), true);
 		return 1;
