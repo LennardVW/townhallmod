@@ -3,7 +3,6 @@ package dev.townhall.nick;
 import com.mojang.authlib.GameProfile;
 import dev.townhall.mixin.ChunkMapAccessor;
 import dev.townhall.mixin.PlayerInfoUpdatePacketAccessor;
-import dev.townhall.mixin.SetPlayerTeamPacketInvoker;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
@@ -15,17 +14,23 @@ import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Score;
 import net.minecraft.world.scores.Scoreboard;
 
 /**
  * The name above a player's head is: team prefix + game profile name + team suffix, as the client knows them.
  * Profile names are limited to 16 characters, so for every other viewer the profile name becomes an invisible,
  * unique token (only color codes) and a client-only team for that player carries the full nickname as prefix
- * (up to 32 characters, with colors). The client looks up scores (death count in the tab list) and team members by
- * profile name, so score and team packets are renamed to the token too. The player's own client keeps the real profile.
+ * (up to 32 characters, with colors). The client looks up scores (death count in the tab list) by profile name, so score
+ * packets of online nicknamed players are renamed to the token too. The player's own client keeps the real profile.
+ * <p>
+ * Vanilla team packets ({@code /team}) are NOT renamed: on the client the token only ever sits in its th_nick team and the
+ * real name sits in the real team, exactly as the server has it. A client scoreboard throws (and disconnects) when it is
+ * told to remove a name from a team the name isn't in, so the token must never be in two teams.
  */
 public final class NickPackets {
 
@@ -71,6 +76,7 @@ public final class NickPackets {
 	}
 
 	public static void onLeave(ServerPlayer left) {
+		Nicknames.onLeave(left);
 		if (Nicknames.of(left.getUUID()).isEmpty()) return;
 		for (ServerPlayer other : left.level().getServer().getPlayerList().getPlayers()) {
 			if (other != left) other.connection.send(removeTeam(left.getUUID()));
@@ -79,8 +85,8 @@ public final class NickPackets {
 
 	/** Returns the packet as this viewer should get it. */
 	public static Packet<?> rewrite(ServerPlayer viewer, Packet<?> packet) {
+		if (!Nicknames.any()) return packet;
 		Map<String, String> renames = Nicknames.headNamesByRealName();
-		if (renames.isEmpty()) return packet;
 		String own = viewer.getGameProfile().name();
 		return switch (packet) {
 			case ClientboundPlayerInfoUpdatePacket info when info.actions().contains(ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER) -> {
@@ -106,16 +112,15 @@ public final class NickPackets {
 					new ClientboundSetScorePacket(renames.get(score.owner()), score.objectiveName(), score.score(), score.display(), score.numberFormat());
 			case ClientboundResetScorePacket reset when reset.owner() != null && !reset.owner().equals(own) && renames.containsKey(reset.owner()) ->
 					new ClientboundResetScorePacket(renames.get(reset.owner()), reset.objectiveName());
-			case ClientboundSetPlayerTeamPacket team when team.getPlayers().stream().anyMatch(n -> !n.equals(own) && renames.containsKey(n)) ->
-					SetPlayerTeamPacketInvoker.townhall$create(team.getName(), ((SetPlayerTeamPacketInvoker) team).townhall$method(), team.getParameters(),
-							team.getPlayers().stream().map(n -> n.equals(own) ? n : renames.getOrDefault(n, n)).toList());
 			default -> packet;
 		};
 	}
 
 	/**
-	 * After a nickname change: every other viewer drops the player (entity and tab entry) and gets them again, now with
-	 * the new profile name, so the name above the head changes right away. Their scores are sent again under the new name.
+	 * After a nickname change: every other viewer drops the player (tab entry, and the entity for viewers in the same world)
+	 * and gets them again, now with the new profile name, so the name above the head changes right away. Their scores are
+	 * sent again under the new name. Viewers in other worlds only get info, team and score packets: re-tracking the entity
+	 * for them would spawn a ghost of the player in their world.
 	 */
 	public static void refresh(ServerPlayer target) {
 		var server = target.level().getServer();
@@ -130,18 +135,26 @@ public final class NickPackets {
 				viewer.connection.send(removeTeam(target.getUUID()));
 				Nicknames.of(target.getUUID()).ifPresent(nick -> viewer.connection.send(addTeam(target.getUUID(), nick)));
 				viewer.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(target)));
-				var scoreboard = server.getScoreboard();
-				for (var entry : scoreboard.listPlayerScores(target).object2IntEntrySet()) {
-					var objective = entry.getKey();
-					if (scoreboard.getObjectiveDisplaySlotCount(objective) == 0) continue;
-					var score = scoreboard.getPlayerScoreInfo(target, objective);
-					// Goes through the send hook like every packet, so it arrives under the new name.
-					viewer.connection.send(new ClientboundSetScorePacket(target.getGameProfile().name(), objective.getName(), entry.getIntValue(),
-							java.util.Optional.empty(), score == null ? java.util.Optional.empty() : java.util.Optional.ofNullable(score.numberFormat())));
-				}
+				// Goes through the send hook like every packet, so it arrives under the new name.
+				scorePackets(target).forEach(viewer.connection::send);
 			};
-			if (tracked instanceof NickRefreshable refreshable) refreshable.townhall$respawnFor(viewer, reAdd);
+			if (tracked instanceof NickRefreshable refreshable && viewer.level() == target.level()) refreshable.townhall$respawnFor(viewer, reAdd);
 			else reAdd.run();
 		}
+	}
+
+	/** The target's scores in displayed objectives, as the server would send them (display text and number format kept). */
+	static List<ClientboundSetScorePacket> scorePackets(ServerPlayer target) {
+		var scoreboard = target.level().getServer().getScoreboard();
+		List<ClientboundSetScorePacket> packets = new ArrayList<>();
+		for (var entry : scoreboard.listPlayerScores(target).object2IntEntrySet()) {
+			var objective = entry.getKey();
+			if (scoreboard.getObjectiveDisplaySlotCount(objective) == 0) continue;
+			var info = scoreboard.getPlayerScoreInfo(target, objective);
+			Optional<Component> display = info instanceof Score score ? Optional.ofNullable(score.display()) : Optional.empty();
+			packets.add(new ClientboundSetScorePacket(target.getScoreboardName(), objective.getName(), entry.getIntValue(),
+					display, info == null ? Optional.empty() : Optional.ofNullable(info.numberFormat())));
+		}
+		return packets;
 	}
 }

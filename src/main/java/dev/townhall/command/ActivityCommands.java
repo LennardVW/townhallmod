@@ -7,6 +7,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.townhall.TownhallMod;
 import dev.townhall.activity.Afk;
 import dev.townhall.activity.Playtime;
+import dev.townhall.nick.Nicknames;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -18,8 +19,9 @@ import net.minecraft.server.players.NameAndId;
 /**
  * <pre>
  * /afk                        mark yourself AFK
- * /playtime [player]          active play time (also offline players)
+ * /playtime [player]          active play time (also offline players; nicknames work as the name)
  * /playtime top               top 10
+ * Names are shown as nicknames (with colors); hovering shows the real player.
  * /townhall afktime &lt;minutes&gt; operator: minutes without activity until AFK (0 = only /afk)   (in TownhallCommand)
  * </pre>
  */
@@ -45,10 +47,12 @@ public final class ActivityCommands {
 	private static int show(CommandContext<CommandSourceStack> ctx, NameAndId player) {
 		var entry = Playtime.get(ctx.getSource().getServer()).of(player.id());
 		if (entry.isEmpty()) {
-			ctx.getSource().sendFailure(Component.literal(player.name() + " hasn't played here yet."));
+			ctx.getSource().sendFailure(Component.empty().append(Nicknames.displayName(ctx.getSource().getServer(), player.id(), player.name()))
+					.append(" hasn't played here yet."));
 			return 0;
 		}
-		ctx.getSource().sendSuccess(() -> Component.literal(player.name() + ": ").withStyle(ChatFormatting.GOLD)
+		Component name = Nicknames.displayName(ctx.getSource().getServer(), player.id(), player.name());
+		ctx.getSource().sendSuccess(() -> Component.empty().withStyle(ChatFormatting.GOLD).append(name).append(": ")
 				.append(Component.literal(Playtime.format(entry.get().millis())).withStyle(ChatFormatting.WHITE))
 				.append(Component.literal(" played").withStyle(ChatFormatting.GRAY)), false);
 		return 1;
@@ -66,7 +70,7 @@ public final class ActivityCommands {
 				default -> ChatFormatting.GRAY;
 			};
 			text.append(Component.literal("\n" + place + ". ").withStyle(color))
-					.append(Component.literal(e.getValue().name()).withStyle(ChatFormatting.WHITE))
+					.append(Component.empty().withStyle(ChatFormatting.WHITE).append(Nicknames.displayName(ctx.getSource().getServer(), e.getKey(), e.getValue().name())))
 					.append(Component.literal("  " + Playtime.format(e.getValue().millis())).withStyle(ChatFormatting.GRAY));
 			place++;
 		}

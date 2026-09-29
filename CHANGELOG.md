@@ -2,6 +2,18 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.13.0
+- `/playtime`, `/playtime <spieler>` und `/playtime top` zeigen den Nicknamen (mit Farben). Mit der Maus darüber sieht man den echten Namen.
+- Befehle verstehen Nicknamen: `/tp Bürgermeister`, `/msg Bürgermeister`, `/playtime Bürgermeister`, `/nick reset Bürgermeister` usw. Groß- und Kleinschreibung und Farben zählen nicht. Der echte Name eines Spielers geht immer vor.
+- Die Befehlsvervollständigung (Tab) schlägt Nicknamen vor statt leerer Einträge.
+- Jeden Nicknamen gibt es nur einmal. `/nick set` lehnt auch Namen ab, die ein anderer Spieler wirklich trägt, auch wenn er offline ist.
+- Kommt später ein neuer Spieler, der so heißt wie ein Nickname, bekommen Admins einen Hinweis.
+- Fix: `/team join` oder `/team leave` bei einem Spieler mit Nicknamen warf andere Spieler vom Server.
+- Fix: Nach `/nick set` sahen Spieler in anderen Welten ein „Geisterbild“ des Spielers.
+- Fix: Eigene Anzeigetexte von Scoreboard-Punkten gingen nach `/nick set` verloren.
+- Fix: Nach einer Namensänderung bei Mojang konnte ein anderer Spieler falsche Punkte in der Tab-Liste bekommen.
+- Die Tab-Liste liest Nicknamen schneller.
+
 ## 1.12.0
 - Neue Welt-Regeln: `mobs`, `fire`, `explosions`, `leafDecay` (`/townhall worldrule <welt> <regel> false`).
 

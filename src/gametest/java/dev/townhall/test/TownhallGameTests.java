@@ -768,8 +768,8 @@ public class TownhallGameTests {
 			console(server, "nick set NickOffline Offliner");
 			h.assertTrue(dev.townhall.nick.Nicknames.of(offlineId).isPresent(), "offline players can get a nickname");
 			var score = new net.minecraft.network.protocol.game.ClientboundSetScorePacket("NickOffline", "townhall_deaths", 3, Optional.empty(), Optional.empty());
-			h.assertTrue(((net.minecraft.network.protocol.game.ClientboundSetScorePacket) dev.townhall.nick.NickPackets.rewrite(viewer, score)).owner().equals(dev.townhall.nick.NickPackets.token(offlineId)),
-					"tab list scores follow the renamed profile");
+			h.assertTrue(((net.minecraft.network.protocol.game.ClientboundSetScorePacket) dev.townhall.nick.NickPackets.rewrite(viewer, score)).owner().equals("NickOffline"),
+					"scores of offline players keep their name (only online profiles are renamed)");
 			console(server, "nick set NickOffline &aBürgermeister");
 			h.assertTrue(dev.townhall.nick.Nicknames.of(offlineId).orElseThrow().getString().contains("Offliner"), "no second player with the same nickname");
 
@@ -964,6 +964,425 @@ public class TownhallGameTests {
 		h.assertFalse(end.getBlockState(leaves).is(net.minecraft.world.level.block.Blocks.OAK_LEAVES), "leaves decay again");
 		end.explode(null, tnt.getX() + 0.5, tnt.getY(), tnt.getZ() + 0.5, 3f, Level.ExplosionInteraction.TNT);
 		h.assertFalse(end.getBlockState(tnt.below()).is(net.minecraft.world.level.block.Blocks.STONE), "explosions break blocks again");
+		h.succeed();
+	}
+
+	// ---- Nicknames in commands, /playtime and packets (1.13.0) ----
+
+	/** Letters only, so the nickname can be typed as one argument; different in every run (the test world is kept). */
+	private static String randomLetters(int n) {
+		var random = new java.util.Random();
+		StringBuilder b = new StringBuilder();
+		for (int i = 0; i < n; i++) b.append((char) ('a' + random.nextInt(26)));
+		return b.toString();
+	}
+
+	/** Command source that keeps every message, to check what a command printed. */
+	private static final class Recorder implements net.minecraft.commands.CommandSource {
+		final List<net.minecraft.network.chat.Component> messages = new java.util.ArrayList<>();
+
+		@Override
+		public void sendSystemMessage(net.minecraft.network.chat.Component message) {
+			messages.add(message);
+		}
+
+		@Override
+		public boolean acceptsSuccess() {
+			return true;
+		}
+
+		@Override
+		public boolean acceptsFailure() {
+			return true;
+		}
+
+		@Override
+		public boolean shouldInformAdmins() {
+			return false;
+		}
+
+		String text() {
+			return String.join("\n", messages.stream().map(m -> m.getString().replaceAll("§.", "")).toList());
+		}
+	}
+
+	/** All hover texts in a component tree (show-text value, or entity name + UUID). */
+	private static String hovers(net.minecraft.network.chat.Component c) {
+		StringBuilder out = new StringBuilder();
+		var hover = c.getStyle().getHoverEvent();
+		if (hover instanceof net.minecraft.network.chat.HoverEvent.ShowText t) out.append(t.value().getString()).append(' ');
+		if (hover instanceof net.minecraft.network.chat.HoverEvent.ShowEntity e) {
+			out.append(e.entity().uuid).append(' ').append(e.entity().name.map(net.minecraft.network.chat.Component::getString).orElse("")).append(' ');
+		}
+		for (var sibling : c.getSiblings()) out.append(hovers(sibling));
+		return out.toString();
+	}
+
+	private static String record(MinecraftServer server, CommandSourceStack source, String command, Recorder recorder) {
+		recorder.messages.clear();
+		server.getCommands().performPrefixedCommand(source.withSource(recorder), command);
+		return recorder.text();
+	}
+
+	@GameTest
+	public void playtimeShowsNicknames(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(1.5, 1, 1.5), 0f, 0f);
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		var playtime = dev.townhall.activity.Playtime.get(server);
+		String suffix = randomLetters(6);
+		String onlineNick = "Zeit" + suffix, offlineNick = "Offzeit" + suffix, offlineName = "PtOff" + suffix;
+		UUID offlineId = UUID.randomUUID();
+		server.services().nameToIdCache().add(new net.minecraft.server.players.NameAndId(offlineId, offlineName));
+		Recorder rec = new Recorder();
+		try {
+			playtime.tick(server, 0);
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6" + onlineNick);
+			var asP = server.createCommandSourceStack().withEntity(p);
+			String own = record(server, asP, "playtime", rec);
+			h.assertTrue(own.contains(onlineNick) && !own.contains(p.getGameProfile().name()), "/playtime shows the own nickname: " + own);
+			h.assertTrue(hovers(rec.messages.getFirst()).contains(p.getUUID().toString()), "hover shows the real player");
+
+			playtime.set(offlineId, offlineName, 3_600_000L * 5);
+			console(server, "nick set " + offlineName + " &b" + offlineNick);
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offlineId).isPresent(), "offline player got a nickname");
+			String other = record(server, server.createCommandSourceStack(), "playtime " + offlineName, rec);
+			h.assertTrue(other.contains(offlineNick + ": 5h 0m") && !other.contains(offlineName), "/playtime <offline player> shows the nickname: " + other);
+			h.assertTrue(hovers(rec.messages.getFirst()).contains(offlineName), "hover shows the real name: " + hovers(rec.messages.getFirst()));
+
+			// GameProfileArgument accepts the offline player's nickname (any case).
+			String byNick = record(server, server.createCommandSourceStack(), "playtime " + offlineNick.toLowerCase(java.util.Locale.ROOT), rec);
+			h.assertTrue(byNick.contains(offlineNick + ": 5h 0m"), "/playtime <nickname of an offline player>: " + byNick);
+
+			playtime.set(offlineId, offlineName, System.currentTimeMillis() * 1000);
+			String top = record(server, server.createCommandSourceStack(), "playtime top", rec);
+			h.assertTrue(top.contains("1. " + offlineNick) && !top.contains(offlineName), "/playtime top shows nicknames: " + top);
+
+			// Positive control: without a nickname the real name is shown again.
+			console(server, "nick reset " + offlineNick);
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offlineId).isEmpty(), "/nick reset <nickname> works for offline players");
+			String plain = record(server, server.createCommandSourceStack(), "playtime " + offlineName, rec);
+			h.assertTrue(plain.contains(offlineName + ": "), "real name without a nickname: " + plain);
+		} finally {
+			nicks.reset(server, p.getUUID());
+			nicks.reset(server, offlineId);
+			playtime.set(offlineId, offlineName, 0); // out of the leaderboard for the next runs
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void commandsAcceptNicknames(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(1.5, 1, 1.5), 0f, 0f);
+		ServerPlayer q = h.makeMockServerPlayerInLevel();
+		Vec3 qPos = h.absoluteVec(new Vec3(5.5, 1, 5.5));
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		String suffix = randomLetters(6);
+		String nick = "Bürger" + suffix;
+		try {
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6" + nick);
+			q.absSnapTo(qPos.x, qPos.y, qPos.z, 0f, 0f);
+			opAt(q, "tp " + nick + " @s");
+			h.assertTrue(p.position().distanceTo(qPos) < 0.01, "/tp <nickname with ü> moves the nickname's owner: " + p.position());
+
+			// Quoted nickname with spaces and longer than 16 characters.
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6Der Große " + suffix + "x");
+			Vec3 back = h.absoluteVec(new Vec3(1.5, 1, 1.5));
+			p.absSnapTo(back.x, back.y, back.z, 0f, 0f);
+			opAt(q, "tp \"der große " + suffix + "X\" @s");
+			h.assertTrue(p.position().distanceTo(qPos) < 0.01, "quoted nickname with spaces works (case ignored)");
+
+			// EntityArgument.player() (single player) and a command players use: /msg.
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6" + nick);
+			Recorder rec = new Recorder();
+			String msg = record(server, server.createCommandSourceStack().withEntity(q), "msg " + nick + " hallo", rec);
+			h.assertFalse(msg.contains("No player was found"), "/msg <nickname> finds the player: " + msg);
+
+			// Real names always win: the name becomes known as a real name (e.g. a new player joined once).
+			p.absSnapTo(back.x, back.y, back.z, 0f, 0f);
+			server.services().nameToIdCache().add(new net.minecraft.server.players.NameAndId(UUID.randomUUID(), nick));
+			opAt(q, "tp " + nick + " @s");
+			h.assertTrue(p.position().distanceTo(back) < 0.01, "a known real name is never resolved to a nickname");
+			h.assertTrue(dev.townhall.nick.Nicknames.profileByNickname(server, nick).isEmpty(), "profile lookup: real name wins");
+		} finally {
+			nicks.reset(server, p.getUUID());
+		}
+		// Positive control: without the nickname the name means nobody.
+		p.absSnapTo(h.absoluteVec(new Vec3(1.5, 1, 1.5)).x, p.getY(), h.absoluteVec(new Vec3(1.5, 1, 1.5)).z, 0f, 0f);
+		opAt(q, "tp Zz" + suffix + " @s");
+		h.assertTrue(p.position().distanceTo(qPos) > 1, "unknown names still find nobody");
+		h.succeed();
+	}
+
+	@GameTest
+	public void offlineNicknameAndRealNameClash(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		String suffix = randomLetters(6);
+		UUID owner = UUID.randomUUID(), newcomer = UUID.randomUUID();
+		String clash = "Clash" + suffix;
+		try {
+			nicks.set(server, owner, "Owner" + suffix, "&c" + clash);
+			var before = dev.townhall.nick.Nicknames.profileByNickname(server, clash);
+			h.assertTrue(before.isPresent() && before.get().id().equals(owner), "offline nickname resolves to its owner");
+			server.services().nameToIdCache().add(new net.minecraft.server.players.NameAndId(newcomer, clash));
+			Recorder rec = new Recorder();
+			server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSource(rec), "nick reset " + clash);
+			h.assertTrue(dev.townhall.nick.Nicknames.of(owner).isPresent(), "/nick reset <name> meant the real player, not the nickname owner");
+		} finally {
+			nicks.reset(server, owner);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void nicknamesAreUnique(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		String suffix = randomLetters(6);
+		UUID offline = UUID.randomUUID(), other = UUID.randomUUID();
+		String offlineName = "Uq" + suffix, cachedName = "Cached" + suffix;
+		server.services().nameToIdCache().add(new net.minecraft.server.players.NameAndId(offline, offlineName));
+		server.services().nameToIdCache().add(new net.minecraft.server.players.NameAndId(other, cachedName));
+		try {
+			opAt(p, "nick set @p[distance=..0.5] &6Taken" + suffix);
+			h.assertTrue(dev.townhall.nick.Nicknames.of(p.getUUID()).isPresent(), "positive control: a free nickname is accepted");
+			console(server, "nick set " + offlineName + " &a taken" + suffix.toUpperCase(java.util.Locale.ROOT) + " ");
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offline).isEmpty(), "same nickname as another player (case, colors, spaces ignored) is rejected");
+			console(server, "nick set " + offlineName + " &b" + cachedName.toLowerCase(java.util.Locale.ROOT));
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offline).isEmpty(), "real name of an offline player from the name cache is rejected");
+			console(server, "nick set " + offlineName + " " + p.getGameProfile().name());
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offline).isEmpty(), "name of an online player is rejected");
+			console(server, "nick set " + offlineName + " Free" + suffix);
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offline).isPresent(), "positive control: a free nickname works for the offline player");
+			console(server, "nick set " + offlineName + " &e" + offlineName);
+			h.assertTrue(dev.townhall.nick.Nicknames.of(offline).orElseThrow().getString().contains(offlineName), "own real name as nickname is allowed");
+		} finally {
+			nicks.reset(server, p.getUUID());
+			nicks.reset(server, offline);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void nicknameCompletionAsksServer(GameTestHelper h) throws ReflectiveOperationException {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 1.5), 0f, 0f);
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		String nick = "Vorschlag" + randomLetters(6);
+		var dispatcher = server.getCommands().getDispatcher();
+		try {
+			var field = Commands.class.getDeclaredField("COMMAND_NODE_INSPECTOR");
+			field.setAccessible(true);
+			@SuppressWarnings("unchecked")
+			var inspector = (net.minecraft.network.protocol.game.ClientboundCommandsPacket.NodeInspector<CommandSourceStack>) field.get(null);
+			var tpTargets = (com.mojang.brigadier.tree.ArgumentCommandNode<CommandSourceStack, ?>) dispatcher.getRoot().getChild("teleport").getChild("targets");
+			h.assertTrue("minecraft:ask_server".equals(String.valueOf(inspector.suggestionId(tpTargets))), "player arguments ask the server for suggestions");
+			var tpLocation = (com.mojang.brigadier.tree.ArgumentCommandNode<CommandSourceStack, ?>) dispatcher.getRoot().getChild("teleport").getChild("location");
+			h.assertTrue(inspector.suggestionId(tpLocation) == null, "other arguments stay client-side");
+
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6" + nick);
+			CommandSourceStack op = server.createCommandSourceStack().withEntity(p);
+			var suggestions = dispatcher.getCompletionSuggestions(dispatcher.parse("tp " + nick.substring(0, 5).toLowerCase(java.util.Locale.ROOT), op)).join();
+			h.assertTrue(suggestions.getList().stream().anyMatch(s -> s.getText().equals(nick)), "server suggests the nickname: " + suggestions.getList());
+			var profile = dispatcher.getCompletionSuggestions(dispatcher.parse("playtime " + nick.substring(0, 5), op)).join();
+			h.assertTrue(profile.getList().stream().anyMatch(s -> s.getText().equals(nick)), "also for profile arguments");
+		} finally {
+			nicks.reset(server, p.getUUID());
+		}
+		var after = dispatcher.getCompletionSuggestions(dispatcher.parse("tp " + nick.substring(0, 5), server.createCommandSourceStack().withEntity(p))).join();
+		h.assertFalse(after.getList().stream().anyMatch(s -> s.getText().equals(nick)), "no suggestion after reset");
+		h.succeed();
+	}
+
+	/** Applies a team packet to a client scoreboard exactly like ClientPacketListener.handleSetPlayerTeamPacket (26.3). */
+	private static void applyOnClient(net.minecraft.world.scores.Scoreboard client, net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket packet) {
+		var add = net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.ADD;
+		var remove = net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.REMOVE;
+		net.minecraft.world.scores.PlayerTeam team;
+		if (packet.getTeamAction() == add) {
+			team = client.addPlayerTeam(packet.getName());
+		} else {
+			team = client.getPlayerTeam(packet.getName());
+			if (team == null) return;
+		}
+		if (packet.getPlayerAction() == add) for (String name : packet.getPlayers()) client.addPlayerToTeam(name, team);
+		else if (packet.getPlayerAction() == remove) for (String name : packet.getPlayers()) client.removePlayerFromTeam(name, team);
+		if (packet.getTeamAction() == remove) client.removePlayerTeam(team);
+	}
+
+	@GameTest
+	public void vanillaTeamsDontDisconnectViewers(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(4.5, 1, 4.5), 0f, 0f);
+		ServerPlayer viewer = h.makeMockServerPlayerInLevel();
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		String name = p.getGameProfile().name(), token = dev.townhall.nick.NickPackets.token(p.getUUID());
+		var serverSide = new net.minecraft.world.scores.Scoreboard();
+		var red = serverSide.addPlayerTeam("th_test_red");
+		var blue = serverSide.addPlayerTeam("th_test_blue");
+		serverSide.addPlayerToTeam(name, red);
+		try {
+			nicks.set(server, p.getUUID(), name, "&6Team" + randomLetters(6));
+			// What the server sends while the player is in "red", then /team join blue, /team leave, nick reset, /team join red, /team leave.
+			List<net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket> sequence = List.of(
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(red, true),
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(blue, true),
+					dev.townhall.nick.NickPacketsTestAccess.addTeam(p.getUUID(), dev.townhall.nick.Nicknames.of(p.getUUID()).orElseThrow()),
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createPlayerPacket(red, name, net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.REMOVE),
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createPlayerPacket(blue, name, net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.ADD),
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createPlayerPacket(blue, name, net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.REMOVE),
+					dev.townhall.nick.NickPacketsTestAccess.removeTeam(p.getUUID()),
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createPlayerPacket(red, name, net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.ADD),
+					net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createPlayerPacket(red, name, net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.REMOVE));
+			var client = new net.minecraft.world.scores.Scoreboard();
+			for (int i = 0; i < sequence.size(); i++) {
+				var sent = (net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket) dev.townhall.nick.NickPackets.rewrite(viewer, sequence.get(i));
+				try {
+					applyOnClient(client, sent);
+				} catch (IllegalStateException e) {
+					h.fail("packet " + i + " would disconnect the viewer: " + e.getMessage());
+				}
+				if (i == 2) h.assertTrue(client.getPlayersTeam(token) != null && client.getPlayersTeam(token).getName().startsWith("th_nick_"), "token sits in its nickname team");
+				if (i == 4) h.assertTrue(client.getPlayersTeam(token).getName().startsWith("th_nick_"), "real team changes don't move the token");
+			}
+			// Negative control: the old rewrite (team names renamed to the token) makes the client throw.
+			var old = new net.minecraft.world.scores.Scoreboard();
+			boolean threw = false;
+			try {
+				for (var packet : sequence.subList(0, 4)) {
+					var players = packet.getPlayers().stream().map(n -> n.equals(name) ? token : n).toList();
+					var renamed = new net.minecraft.world.scores.Scoreboard();
+					var team = renamed.addPlayerTeam(packet.getName());
+					players.forEach(n -> renamed.addPlayerToTeam(n, team));
+					var copy = packet.getTeamAction() == net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.ADD
+							? net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(team, true)
+							: packet.getTeamAction() == net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.REMOVE
+									? packet
+									: net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.createPlayerPacket(team, players.getFirst(), packet.getPlayerAction());
+					applyOnClient(old, copy);
+				}
+			} catch (IllegalStateException e) {
+				threw = true;
+			}
+			h.assertTrue(threw, "control: renaming team members to the token would disconnect the viewer");
+		} finally {
+			nicks.reset(server, p.getUUID());
+		}
+		h.succeed();
+	}
+
+	/**
+	 * Waits until the tracker would show the target to this viewer at all (vanilla re-track, like the old refresh did).
+	 * Mock clients never confirm chunk batches, so the test confirms them, otherwise the chunk stays "pending".
+	 */
+	private static void whenTrackable(GameTestHelper h, java.util.function.Supplier<dev.townhall.test.mixin.TrackedEntityTestAccessor> tracker,
+			ServerPlayer viewer, int tries, Runnable then) {
+		h.runAfterDelay(2, () -> {
+			var access = tracker.get();
+			((dev.townhall.nick.NickRefreshable) access).townhall$respawnFor(viewer, () -> {});
+			boolean trackable = access.townhall$seenBy().contains(viewer.connection);
+			access.townhall$removePlayer(viewer);
+			if (trackable) {
+				then.run();
+			} else if (tries < 40) {
+				viewer.connection.chunkSender.onChunkBatchReceivedByClient(64f);
+				whenTrackable(h, tracker, viewer, tries + 1, then);
+			} else {
+				h.fail("the viewer's chunks never got tracked");
+			}
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void nickRefreshOnlyRespawnsInSameWorld(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer target = playerOnFloor(h, new Vec3(5.5, 1, 1.5), 0f, 0f);
+		ServerPlayer viewer = h.makeMockServerPlayerInLevel();
+		net.minecraft.server.level.ServerLevel nether = server.getLevel(Level.NETHER);
+		viewer.teleportTo(nether, target.getX(), 80, target.getZ(), java.util.Set.of(), 0f, 0f, false);
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		java.util.function.Supplier<dev.townhall.test.mixin.TrackedEntityTestAccessor> tracker = () -> (dev.townhall.test.mixin.TrackedEntityTestAccessor)
+				((dev.townhall.mixin.ChunkMapAccessor) target.level().getChunkSource().chunkMap).townhall$entityMap().get(target.getId());
+		// Control: once this passes, the old refresh (re-track for every viewer) would put the viewer in the Nether on the
+		// overworld target's tracker = a ghost of the target in the Nether.
+		whenTrackable(h, tracker, viewer, 0, () -> {
+			try {
+				h.assertTrue(viewer.level() == nether, "viewer is in the Nether");
+				nicks.set(server, target.getUUID(), target.getGameProfile().name(), "&6Welt" + randomLetters(6)); // calls refresh
+				h.assertFalse(tracker.get().townhall$seenBy().contains(viewer.connection), "viewer in another world gets no entity of the target");
+			} finally {
+				nicks.reset(server, target.getUUID());
+			}
+			// Positive control: back in the same world next to the target, the refresh shows the target to the viewer again.
+			viewer.teleportTo(h.getLevel(), target.getX() + 1, target.getY(), target.getZ(), java.util.Set.of(), 0f, 0f, false);
+			whenTrackable(h, tracker, viewer, 0, () -> {
+				try {
+					nicks.set(server, target.getUUID(), target.getGameProfile().name(), "&6Wieder" + randomLetters(6));
+					h.assertTrue(tracker.get().townhall$seenBy().contains(viewer.connection), "viewer in the same world sees the target again after the refresh");
+				} finally {
+					nicks.reset(server, target.getUUID());
+				}
+				h.succeed();
+			});
+		});
+	}
+
+	@GameTest
+	public void nickScorePackets(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(6.5, 1, 6.5), 0f, 0f);
+		ServerPlayer viewer = h.makeMockServerPlayerInLevel();
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		var scoreboard = server.getScoreboard();
+		String objectiveName = "th_" + randomLetters(8);
+		var objective = scoreboard.addObjective(objectiveName, net.minecraft.world.scores.criteria.ObjectiveCriteria.DUMMY,
+				net.minecraft.network.chat.Component.literal("Test"), net.minecraft.world.scores.criteria.ObjectiveCriteria.RenderType.INTEGER, false, null);
+		UUID renamed = UUID.randomUUID();
+		try {
+			scoreboard.setDisplayObjective(net.minecraft.world.scores.DisplaySlot.BELOW_NAME, objective);
+			var score = scoreboard.getOrCreatePlayerScore(p, objective);
+			score.set(7);
+			score.display(net.minecraft.network.chat.Component.literal("Chef"));
+			// B16: the refresh re-sends the score with its display text.
+			var packet = dev.townhall.nick.NickPacketsTestAccess.scorePackets(p).stream().filter(s -> s.objectiveName().equals(objectiveName)).findFirst().orElseThrow();
+			h.assertTrue(packet.score() == 7 && packet.display().map(net.minecraft.network.chat.Component::getString).orElse("").equals("Chef"), "custom score display kept: " + packet.display());
+
+			// B15: a nickname whose stored real name is now someone else's name (Mojang rename) must not rename that player's scores.
+			// (All mock players share one name and the viewer's own name is never renamed, so this checks the rename map itself.)
+			nicks.set(server, renamed, p.getGameProfile().name(), "&7Umbenannt" + randomLetters(6));
+			var heads = dev.townhall.nick.Nicknames.headNamesByRealName();
+			h.assertFalse(heads.containsValue(dev.townhall.nick.NickPackets.token(renamed)), "an offline player's old name never renames an online player's scores: " + heads);
+			// Positive control: the online nicknamed player's name maps to an online token.
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6Punkte" + randomLetters(6));
+			String own = dev.townhall.nick.Nicknames.headNamesByRealName().get(p.getGameProfile().name());
+			boolean isOnlineToken = own != null && server.getPlayerList().getPlayers().stream()
+					.anyMatch(o -> dev.townhall.nick.Nicknames.of(o.getUUID()).isPresent() && dev.townhall.nick.NickPackets.token(o.getUUID()).equals(own));
+			h.assertTrue(isOnlineToken, "online nicknamed player's name maps to an online token: " + own);
+		} finally {
+			nicks.reset(server, p.getUUID());
+			nicks.reset(server, renamed);
+			scoreboard.removeObjective(objective);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void tabListUsesCheapNickLookup(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 5.5), 0f, 0f);
+		var nicks = dev.townhall.nick.Nicknames.get(server);
+		String nick = "Tab" + randomLetters(6);
+		try {
+			h.assertTrue(dev.townhall.display.TabList.lines(List.of("{player}"), p).getString().equals(p.getGameProfile().name()), "real name without a nickname");
+			nicks.set(server, p.getUUID(), p.getGameProfile().name(), "&6" + nick);
+			h.assertTrue(dev.townhall.nick.Nicknames.raw(p.getUUID()).equals("&6" + nick), "static lookup by UUID");
+			h.assertTrue(dev.townhall.display.TabList.lines(List.of("{player}", "x {player}"), p).getString().replaceAll("§.", "").equals(nick + "\nx " + nick), "{player} = nickname on every line");
+		} finally {
+			nicks.reset(server, p.getUUID());
+		}
 		h.succeed();
 	}
 }

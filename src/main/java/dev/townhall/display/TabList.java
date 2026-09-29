@@ -27,18 +27,27 @@ public final class TabList {
 				player.connection.send(new ClientboundTabListPacket(Component.empty(), Component.empty()));
 				continue;
 			}
-			player.connection.send(new ClientboundTabListPacket(lines(cfg.header, player), lines(cfg.footer, player)));
+			String name = name(player);
+			player.connection.send(new ClientboundTabListPacket(lines(cfg.header, player, name), lines(cfg.footer, player, name)));
 		}
 	}
 
 	public static Component lines(List<String> lines, ServerPlayer player) {
-		return Text.of(String.join("\n", lines.stream().map(l -> fill(l, player)).toList()));
+		return lines(lines, player, name(player));
 	}
 
-	static String fill(String line, ServerPlayer player) {
+	private static Component lines(List<String> lines, ServerPlayer player, String name) {
+		return Text.of(String.join("\n", lines.stream().map(l -> fill(l, player, name)).toList()));
+	}
+
+	/** {player}: nickname (with &-colors) or real name. Static lookup, no copy of the saved data. */
+	private static String name(ServerPlayer player) {
+		String nick = Nicknames.raw(player.getUUID());
+		return nick != null ? nick + "&r" : player.getGameProfile().name();
+	}
+
+	static String fill(String line, ServerPlayer player, String name) {
 		MinecraftServer server = player.level().getServer();
-		String name = Nicknames.get(server).entries().containsKey(player.getUUID())
-				? Nicknames.get(server).entries().get(player.getUUID()).nick() + "&r" : player.getGameProfile().name();
 		return line.replace("{player}", name)
 				.replace("{online}", String.valueOf(server.getPlayerList().getPlayerCount()))
 				.replace("{max}", String.valueOf(server.getPlayerList().getMaxPlayers()))

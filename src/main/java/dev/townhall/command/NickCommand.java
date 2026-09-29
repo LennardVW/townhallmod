@@ -28,7 +28,7 @@ import java.util.UUID;
  */
 public final class NickCommand {
 
-	static final int MAX_LENGTH = 32;
+	public static final int MAX_LENGTH = 32;
 
 	private NickCommand() {}
 
@@ -45,7 +45,7 @@ public final class NickCommand {
 		if (players.size() != 1) return fail(ctx, "Pick exactly one player.");
 		NameAndId player = players.iterator().next();
 		String nick = StringArgumentType.getString(ctx, "nickname").strip();
-		String problem = problem(ctx.getSource().getServer(), player.id(), nick);
+		String problem = problem(ctx.getSource().getServer(), player, nick);
 		if (problem != null) return fail(ctx, problem);
 		Nicknames.get(ctx.getSource().getServer()).set(ctx.getSource().getServer(), player.id(), player.name(), nick);
 		TownhallMod.LOGGER.info("{} set the nickname of {} to {}", ctx.getSource().getTextName(), player.name(), nick);
@@ -54,21 +54,23 @@ public final class NickCommand {
 		return 1;
 	}
 
-	/** Why this nickname can't be used, or null. Stops empty, too long and look-alike names of other players. */
-	static String problem(MinecraftServer server, UUID owner, String nick) {
+	/**
+	 * Why this nickname can't be used, or null. Stops empty and too long names, and every name that would make a typed
+	 * player name ambiguous: another player's nickname, or the real name of any player the server knows (online, name
+	 * cache, operators, whitelist, play time and nickname records). Color codes, case and outer spaces don't count.
+	 * The owner may use their own real name.
+	 */
+	static String problem(MinecraftServer server, NameAndId owner, String nick) {
 		String plain = Nicknames.plain(nick);
 		if (plain.isEmpty()) return "The nickname is empty.";
 		if (plain.length() > MAX_LENGTH) return "Nicknames can have at most " + MAX_LENGTH + " characters.";
-		for (var online : server.getPlayerList().getPlayers()) {
-			if (!online.getUUID().equals(owner) && Nicknames.plain(online.getGameProfile().name()).equals(plain)) {
-				return "That is the name of another player.";
+		for (Map.Entry<UUID, Nicknames.Entry> e : Nicknames.get(server).entries().entrySet()) {
+			if (!e.getKey().equals(owner.id()) && Nicknames.plain(e.getValue().nick()).equals(plain)) {
+				return "Another player already has that nickname.";
 			}
 		}
-		for (Map.Entry<UUID, Nicknames.Entry> e : Nicknames.get(server).entries().entrySet()) {
-			if (e.getKey().equals(owner)) continue;
-			if (Nicknames.plain(e.getValue().nick()).equals(plain) || Nicknames.plain(e.getValue().name()).equals(plain)) {
-				return "Another player already uses that name.";
-			}
+		if (!Nicknames.plain(owner.name()).equals(plain) && Nicknames.isKnownRealName(server, plain)) {
+			return "That is the name of another player.";
 		}
 		return null;
 	}

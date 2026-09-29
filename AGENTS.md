@@ -16,13 +16,13 @@ User-facing docs (German): `README.md`.
 | Loom | 1.18.2 (`net.fabricmc.fabric-loom`, `implementation` deps, no `mappings`) |
 | Java | 25 |
 
-Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Everything else uses Fabric API events.
+Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Nicknames in commands: `EntitySelectorMixin`, `EntitySelectorParserMixin`, `GameProfileArgumentMixin`, `CachedUserNameToIdResolverMixin`, completion: `CommandNodeInspectorMixin`, `CommandSourceStackMixin` (see Nicknames below). Everything else uses Fabric API events.
 
 ## Commands
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 36 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 45 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
 ```
 
@@ -49,9 +49,13 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `command/BuilderCommand.java` | `/builder add|remove <dim> <player>`, `list` (op; add resolves offline names via `GameProfileArgument` → name cache → Mojang), `creative|survival` (builders, only in their world) |
 | `protection/BuilderPermissions.java` | `PermissionEvents.ON_REQUEST` (fabric-permission-api-v1): `worldedit:*` → TRUE for builders standing in their builder world, except `DENIED` |
 | `display/DeathsInTab.java` | Scoreboard objective `townhall_deaths` (deathCount criterion, red `StyledFormat`) in `DisplaySlot.LIST`; score set from `Stats.DEATHS` on join/respawn; `apply(server)` on start, reload and `/townhall deathsintab on|off` |
-| `nick/Nicknames.java` | `SavedData` UUID → (nick, real name) in `data/townhall/nicknames.dat`; static component map for the hot path; sends `UPDATE_DISPLAY_NAME` on change |
-| `nick/NickPackets.java` | Name above the head = team prefix + profile name. For other viewers the profile name becomes an invisible per-UUID token (`§r` + 6 color codes, 14 chars) and a client-only team `th_nick_<uuid8>` carries the full nickname as prefix (32 chars, colors). Score/team packets are renamed real name → token. Teams sent on join/leave/`refresh`; `refresh` re-sends the player (TrackedEntityMixin despawn/respawn) |
-| `command/NickCommand.java` | `/nick set|reset|list` (op); rejects empty, > 32 chars, and names of other players/nicks (color codes ignored) |
+| `nick/Nicknames.java` | `SavedData` UUID → (nick, real name) in `data/townhall/nicknames.dat`; static maps for hot paths: components (`of`), raw text (`raw`, tab list), plain nick → owner (`ownerOf`, commands), online profile name → token (`headNamesByRealName`, rebuilt on join/leave/change). `isKnownRealName`, `onlineByNickname`, `profileByNickname`, `displayName` (nick + real name on hover, for lists), `suggestions` |
+| `nick/NickPackets.java` | Name above the head = team prefix + profile name. For other viewers the profile name becomes an invisible per-UUID token (`§r` + 6 color codes, 14 chars) and a client-only team `th_nick_<uuid8>` carries the full nickname as prefix (32 chars, colors). Score packets of **online** nicknamed players are renamed real name → token; vanilla team packets are never touched. Teams sent on join/leave/`refresh`; `refresh` re-sends the player (TrackedEntityMixin despawn/respawn) only to viewers in the same world |
+| `nick/KnownNames.java` | Interface on the name cache (`CachedUserNameToIdResolverMixin`, test: `MockUserNameToIdResolverMixin`): is a name stored, without a Mojang lookup |
+| `command/NickCommand.java` | `/nick set|reset|list` (op); rejects empty, > 32 chars, another player's nickname and every known real name (`Nicknames.isKnownRealName`); color codes, case and outer spaces ignored; own real name allowed |
+| `mixin/EntitySelectorMixin.java`, `mixin/EntitySelectorParserMixin.java` | Plain names in entity arguments: fallback to an online player's nickname when `PlayerList.getPlayerByName` finds nobody and the name is no known real name; parser reads unquoted names with any letters/digits (ü, ß) and quoted names up to 32 chars |
+| `mixin/GameProfileArgumentMixin.java` | Plain names in profile arguments (`/playtime`, `/nick`, `/builder`, `/op`): nickname (also offline) → owner, before the name cache (offline mode invents a profile for every unknown name) |
+| `mixin/CommandNodeInspectorMixin.java`, `mixin/CommandSourceStackMixin.java` | Command tree marks entity/profile arguments without own suggestions as `ask_server`; server-side `getOnlinePlayerNames` adds typable nicknames of online players |
 | `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors |
 | `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look/walk; chat and commands via message events), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`), `/playtime [player|top]`, `/afk` |
 | `display/JoinMessages.java`, `display/TabList.java`, `command/ChatDisplayCommands.java` | Vanilla join/leave suppressed via `ALLOW_GAME_MESSAGE` (translation keys), own templates with `{player}`; first join = `Stats.LEAVE_GAME == 0`; tab header/footer every 2 s with placeholders |
@@ -60,7 +64,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `mixin/BlockItemMixin.java`, `mixin/PlayerMixin.java` | Placement and hunger hooks (no Fabric event for them) |
 | `mixin/CommandsMixin.java` | `Commands.performCommand` HEAD: confined non-op players may only run `confinement.allowedCommands` |
 | `mixin/LevelMixin.java` | Adds `Level.getDifficulty()` override (vanilla only has the `LevelAccessor` default) |
-| `src/gametest/.../TownhallGameTests.java` | 36 GameTests |
+| `src/gametest/.../TownhallGameTests.java` | 45 GameTests |
 
 ## Core rules
 
@@ -132,6 +136,7 @@ The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `le
 ## Rules – don't break these
 
 - Store by **UUID**, never by name.
+- Nicknames: real names always win over nicknames when a typed name is resolved. Never put the nick token into a vanilla team packet (the client scoreboard throws on a REMOVE for a team the name isn't in and disconnects the viewer). Never re-track (`updatePlayer`) a player for a viewer in another world.
 - Never save a return position while the player stands in a location world.
 - All world access and teleports stay on the server thread (commands and events already are).
 - No per-tick work. Everything is command- or event-driven.
@@ -164,4 +169,5 @@ new feature → minor (1.3.0 → 1.4.0), bug fix only → patch (1.3.0 → 1.3.1
 - Old tests turn `onboarding.enabled` off in `playerOnFloor` (each mock "joins" and would otherwise be restricted).
 - Timers and pull-back are tested by calling `ConfinementService.check(server, elapsedMillis)` directly (deterministic, no waiting).
 - Command blocking is tested with a stand-in command (`escapetest`) registered on the live dispatcher.
+- Nickname tests use random nicknames per run (the test world keeps `nicknames.dat`) and reset them in `finally`. All mock players share one profile name, and `NickPackets.rewrite` never renames the viewer's own name, so rename-map checks read `Nicknames.headNamesByRealName()` directly. Team packets are replayed against a plain `Scoreboard` that mirrors `ClientPacketListener.handleSetPlayerTeamPacket`.
 - Not covered: real vanilla client, real death/respawn (the test calls `keepConfined` directly), difficulty display on a real client.
