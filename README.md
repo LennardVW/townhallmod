@@ -133,6 +133,11 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 
 Es reicht, wenn der Schlüssel irgendwo im Inventar liegt. Du musst ihn nicht in der Hand halten. Ohne passenden Schlüssel lässt sich die Tür weder öffnen noch abbauen, und auch Knöpfe, Hebel, Redstone und Dorfbewohner öffnen sie nicht. Das funktioniert mit Holz-, Kupfer- und Eisentüren.
 
+- Abschließen kannst du nur Türen, an denen du bauen darfst. In einer Welt mit `build false` bleiben öffentliche Türen also offen (außer für Bauer und Admins).
+- Eine abgeschlossene Tür bleibt stehen, auch wenn der Block darunter verschwindet. Den Block darunter abbauen darf nur, wer den Schlüssel hat. Kolben, Explosionen und Zombies zerstören abgeschlossene Türen nicht.
+- Verschwindet eine abgeschlossene Tür trotzdem (zum Beispiel per Befehl), ist das Schloss weg. Eine neue Tür an derselben Stelle ist nicht abgeschlossen.
+- `/key new` und `/key copy` gehen je einmal alle 10 Sekunden (Admins ohne Wartezeit). Schlüssel lassen sich nicht zu Fallenkisten oder Armbrüsten verarbeiten.
+
 ### Im Gefängnis
 
 Hat dich ein Admin ins Gefängnis geschickt, kommst du nicht selbst heraus.
@@ -219,7 +224,7 @@ Jede Welt, auch die Welten anderer Mods, kann eigene Regeln bekommen. Den Weltna
 | Regel | Wirkung bei `false` |
 |---|---|
 | `pvp` | Spieler können sich nicht gegenseitig schaden. |
-| `build` | Nur Admins und eingetragene Bauer dürfen Blöcke setzen oder abbauen, Eimer, Feuerzeug, Rahmen und Rüstungsständer benutzen. Türen, Knöpfe und Kisten bleiben benutzbar. |
+| `build` | Nur Admins und eingetragene Bauer dürfen Blöcke setzen oder abbauen, Eimer, Feuerzeug, Rahmen und Rüstungsständer benutzen, Schilder beschreiben oder färben, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke und Tageslichtsensoren verstellen, Farbstoff, Tintenbeutel, Honigwaben, Scheren, Pinsel, Enderaugen und Wasserflaschen auf Blöcke anwenden. Pfeile, Dreizacke und Schneebälle von anderen Spielern zerstören keine Rahmen, Bilder, Rüstungsständer, Boote, Loren oder Krüge und zünden kein TNT. Benutzbar bleiben Türen, Falltüren, Zauntore, Knöpfe, Hebel, Betten, Kisten und alle Blöcke mit Menü (Werkbank, Ofen, Amboss, Zaubertisch und so weiter), auch mit Werkzeug oder Eimer in der Hand. Wer schleicht, benutzt das Item statt des Blocks. |
 | `hunger` | Kein Hunger. Beim Betreten der Welt wird die Hungerleiste aufgefüllt. |
 | `fallDamage` | Kein Fallschaden. |
 | `mobs` | Mobs spawnen nicht von selbst: nicht natürlich, nicht in neu erzeugten Chunks, nicht aus Spawnern und Trial-Spawnern, nicht als Patrouille, Phantom, Skelettpferd-Falle oder Piglin aus dem Netherportal. Überfälle (Raids) starten nicht, laufende hören auf. Spawn-Eier und Befehle funktionieren weiter. |
@@ -274,7 +279,7 @@ Gilt in einer Welt `build false`, dürfen dort normalerweise nur Admins bauen. M
 | `/builder creative` | Bauer | In der eigenen Bauwelt in den Creative-Modus wechseln |
 | `/builder survival` | Bauer | Zurück in Survival |
 
-In seiner Welt darf ein Bauer bauen und abbauen wie ein Admin und WorldEdit benutzen (`//wand`, `//set`, `//copy` und so weiter). Gesperrt bleiben WorldEdit-Befehle für Admins: `/we reload`, `//world`, `/butcher`, `/remove…`, Snapshots, unbegrenzte Limits und ähnliche.
+In seiner Welt darf ein Bauer bauen und abbauen wie ein Admin und WorldEdit benutzen (`//wand`, `//set`, `//copy` und so weiter). Gesperrt bleiben WorldEdit-Befehle für Admins: `/we reload`, `//world`, `/butcher`, `/remove…`, Snapshots, unbegrenzte Limits, CraftScripts (`/cs`), Schematics löschen, `setnbt` und ähnliche. Schematics speichern und laden dürfen Bauer.
 
 Verlässt der Bauer seine Welt durch Teleport oder Tod oder loggt er sich woanders ein, ist er automatisch wieder im Survival-Modus und hat dort kein WorldEdit.
 
@@ -301,7 +306,15 @@ Nur Admins vergeben Nicknamen, Spieler können ihren eigenen nicht ändern.
 | `/nick reset Max` | Wieder der echte Name |
 | `/nick list` | Alle vergebenen Nicknamen |
 
-Der Nickname erscheint im Chat, in der Tab-Liste und über dem Kopf des Spielers. Fährt man im Chat mit der Maus darüber, sieht man den echten Namen. Befehle wie `/tp Max` oder `/msg Max` benutzen weiter den echten Namen. Ein Nickname darf nicht so heißen wie ein anderer Spieler; Farbcodes zählen dabei nicht mit.
+Der Nickname erscheint im Chat, in der Tab-Liste, über dem Kopf des Spielers und bei `/playtime`. Fährt man im Chat oder bei `/playtime` mit der Maus darüber, sieht man den echten Namen.
+
+**Befehle mit Nicknamen:** Überall, wo man einen Spielernamen eintippt, geht auch der Nickname, zum Beispiel `/tp Bürgermeister`, `/msg Bürgermeister hallo`, `/playtime Bürgermeister` oder `/nick reset Bürgermeister`. Farben und Groß-/Kleinschreibung zählen nicht. Die Tab-Taste schlägt Nicknamen vor.
+
+- Der echte Name geht immer vor. Heißt ein Spieler wirklich so wie ein Nickname, meint der Befehl den echten Spieler.
+- Nicknamen mit Leerzeichen in Anführungszeichen setzen: `/tp "Der Bürgermeister"`. Bei `/playtime`, `/nick` und anderen Befehlen, die auch Offline-Spieler kennen, geht das nicht; dort den echten Namen benutzen.
+- Bei `/msg`, `/tell` und `/w` Nicknamen mit Umlauten oder Sonderzeichen in Anführungszeichen setzen: `/msg "Bürgermeister" hallo`. Sonst lehnt das Spiel die Nachricht ab. Dort gehen nur Nicknamen mit höchstens 16 Zeichen; bei längeren den echten Namen nehmen.
+
+**Jeden Nicknamen gibt es nur einmal.** `/nick set` lehnt einen Nicknamen ab, wenn ein anderer Spieler ihn schon hat oder wenn ein Spieler wirklich so heißt (auch offline, wenn der Server ihn kennt). Farben, Groß-/Kleinschreibung und Leerzeichen am Rand zählen dabei nicht. Den eigenen echten Namen darf man als Nickname nehmen. Kommt später ein neuer Spieler, der so heißt wie ein vorhandener Nickname, schreibt der Server Admins einen Hinweis; dann dem anderen Spieler mit `/nick set` einen neuen Nicknamen geben.
 
 ### AFK und Spielzeit
 
@@ -444,6 +457,8 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 | Spieler landen in der Luft oder in einem Block | An der richtigen Stelle `/townhall setspawn` eingeben |
 | Admin-Befehle fehlen | Der Spieler braucht Op-Level 2 (`/op <name>`). |
 | „No player was found“ | Für `send` und `return` muss der Spieler online sein. `/builder`, `/nick` und `/playtime` gehen auch offline. |
+| Nickname wird bei einem Befehl nicht gefunden | Hat der Nickname Leerzeichen, in Anführungszeichen setzen (`/tp "Der Chef"`) oder den echten Namen nehmen. Heißt ein anderer Spieler wirklich so, meint der Befehl ihn; `/nick list` zeigt, wer welchen Nicknamen hat. |
+| „That is the name of another player.“ bei `/nick set` | Ein Spieler, den der Server kennt, heißt wirklich so. Einen anderen Nicknamen wählen. |
 | Gefangener kann einen Befehl nicht benutzen, der erlaubt sein soll | Den Befehl zu `confinement.allowedCommands` hinzufügen, dann `/townhall reload` |
 | Schwierigkeit im Menü stimmt nach `/difficulty` nicht | Die Weltschwierigkeit gilt trotzdem. Einmal die Welt wechseln oder `/townhall reload`, dann stimmt die Anzeige wieder. |
 | Bauer kann kein WorldEdit benutzen | Er muss in der Welt stehen, für die er eingetragen ist. `/builder list` prüfen. |
@@ -476,8 +491,8 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 ## Bekannte Grenzen
 
 - **Gemeinsames Inventar:** Bauer können Creative-Items in andere Welten mitnehmen. Getrennte Inventare pro Welt gibt es noch nicht.
-- **Abgeschlossene Türen:** Zombies auf „schwer“ und Explosionen können sie zerstören. Die Weltregel `explosions false` verhindert Letzteres.
-- **Nicknamen:** Bei Spielern mit Nicknamen fehlt über dem Kopf die Farbe von Scoreboard-Teams (`/team`). In der Befehlsvervollständigung erscheinen sie als leerer Eintrag; dort den echten Namen tippen.
+- **Abgeschlossene Türen:** Wer an einer Stelle bauen darf, kann dort auch Türen anderer Spieler abschließen, solange sie noch offen sind. Grundstücke gibt es nicht.
+- **Nicknamen:** Bei Spielern mit Nicknamen fehlen über dem Kopf Farbe, Präfix und Einstellungen von Scoreboard-Teams (`/team`); die Teams selbst funktionieren. Nicknamen mit Leerzeichen oder Zeichen wie `!` schlägt die Tab-Taste nicht vor. Nicknamen mit Leerzeichen gehen nur bei Befehlen für Online-Spieler (in Anführungszeichen).
 - **Schwierigkeit pro Welt:** Einige wenige Stellen im Spiel lesen weiterhin die Server-Schwierigkeit, etwa Endermiten aus Enderperlen oder Piglins aus Netherportalen.
 - **Wetter:** Welten ohne Wetter (Nether, End) können kein festes Wetter bekommen.
 - **Schlafen:** In einer Welt mit festem Gewitter kann man auch nachts nicht schlafen.

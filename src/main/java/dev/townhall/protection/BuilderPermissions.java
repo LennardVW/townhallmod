@@ -18,7 +18,8 @@ public final class BuilderPermissions {
 
 	/** Parts of WorldEdit a builder never gets: server-wide or dangerous. */
 	static final List<String> DENIED = List.of("reload", "report", "debugpaste", "trace", "limit.unrestricted",
-			"timeout.unrestricted", "snapshots", "world", "delchunks", "butcher", "remove", "fast", "perf", "globalmask");
+			"timeout.unrestricted", "snapshots", "world", "delchunks", "butcher", "remove", "fast", "perf", "globalmask",
+			"scripting", "schematic.delete", "setnbt");
 
 	private BuilderPermissions() {}
 

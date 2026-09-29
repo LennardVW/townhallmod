@@ -13,6 +13,27 @@ Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbeh
 - Fix: `/joinmessage set <spieler> -` bedeutet jetzt „keine Join-Nachricht“ statt eines „-“ im Chat.
 - Fix: `/tablist off` löscht Kopf- und Fußzeile nur einmal und schickt danach nichts mehr, sodass Tab-Listen anderer Mods stehen bleiben.
 
+## 1.13.0
+- `/playtime`, `/playtime <spieler>` und `/playtime top` zeigen den Nicknamen (mit Farben). Mit der Maus darüber sieht man den echten Namen.
+- Befehle verstehen Nicknamen: `/tp Bürgermeister`, `/msg Bürgermeister`, `/playtime Bürgermeister`, `/nick reset Bürgermeister` usw. Groß- und Kleinschreibung und Farben zählen nicht. Der echte Name eines Spielers geht immer vor.
+- Die Befehlsvervollständigung (Tab) schlägt Nicknamen vor statt leerer Einträge.
+- Jeden Nicknamen gibt es nur einmal. `/nick set` lehnt auch Namen ab, die ein anderer Spieler wirklich trägt, auch wenn er offline ist.
+- Kommt später ein neuer Spieler, der so heißt wie ein Nickname, bekommen Admins einen Hinweis.
+- Fix: `/team join` oder `/team leave` bei einem Spieler mit Nicknamen warf andere Spieler vom Server.
+- Fix: Nach `/nick set` sahen Spieler in anderen Welten ein „Geisterbild“ des Spielers.
+- Fix: Eigene Anzeigetexte von Scoreboard-Punkten gingen nach `/nick set` verloren.
+- Fix: Nach einer Namensänderung bei Mojang konnte ein anderer Spieler falsche Punkte in der Tab-Liste bekommen.
+- Die Tab-Liste liest Nicknamen schneller.
+
+## 1.12.2
+- Fix: Türen abschließen geht nur noch dort, wo man bauen darf. Fremde öffentliche Türen in Welten mit `build false` bleiben offen.
+- Fix: Abgeschlossene Türen lassen sich nicht mehr umgehen: Block darunter abbauen, Kolben, Explosionen und Zombies zerstören sie nicht. Eine neue Tür erbt kein altes Schloss.
+- Fix: `/townhall reload` nimmt entfernten Bauern sofort Creative weg.
+- Fix: `build false` schützt jetzt auch Schilder, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke, Tageslichtsensoren, Farbstoff, Scheren, Pinsel und Ähnliches, und Pfeile anderer Spieler zerstören keine Rahmen, Bilder oder Krüge mehr.
+- Fix: Mit Werkzeug oder Eimer in der Hand lassen sich Türen, Kisten und Knöpfe in `build false`-Welten wieder benutzen.
+- Fix: Bauer dürfen keine CraftScripts, kein `setnbt` und kein Schematic-Löschen in WorldEdit.
+- Fix: `/key new` und `/key copy` haben 10 Sekunden Wartezeit, und Schlüssel lassen sich nicht mehr verbauen (Fallenkiste, Armbrust).
+
 ## 1.12.1
 - Fix: Befehle auf Schildern laufen mit den Rechten des Spielers. Ein Schild mit `/townhall return` holt keine Gefangenen mehr heraus, öffnet keine Admin-Orte und umgeht weder Wartezeit noch die Befehlssperre.
 - Fix: Ist `config/townhall.json` fehlerhaft (beim Start oder nach `/townhall reload`), überschreiben Befehle die Datei nicht mehr, sondern melden „Config not saved“. Schreibfehler werden ebenfalls gemeldet statt „gespeichert“.
