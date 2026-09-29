@@ -16,13 +16,13 @@ User-facing docs (German): `README.md`.
 | Loom | 1.18.2 (`net.fabricmc.fabric-loom`, `implementation` deps, no `mappings`) |
 | Java | 25 |
 
-Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Everything else uses Fabric API events.
+Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `ProjectileMixin` (player projectiles vs. world objects/blocks for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Everything else uses Fabric API events.
 
 ## Commands
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 36 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 43 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
 ```
 
@@ -52,7 +52,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `nick/Nicknames.java` | `SavedData` UUID → (nick, real name) in `data/townhall/nicknames.dat`; static component map for the hot path; sends `UPDATE_DISPLAY_NAME` on change |
 | `nick/NickPackets.java` | Name above the head = team prefix + profile name. For other viewers the profile name becomes an invisible per-UUID token (`§r` + 6 color codes, 14 chars) and a client-only team `th_nick_<uuid8>` carries the full nickname as prefix (32 chars, colors). Score/team packets are renamed real name → token. Teams sent on join/leave/`refresh`; `refresh` re-sends the player (TrackedEntityMixin despawn/respawn) |
 | `command/NickCommand.java` | `/nick set|reset|list` (op); rejects empty, > 32 chars, and names of other players/nicks (color codes ignored) |
-| `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors |
+| `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors and keeps a locked lower half when its support goes (`updateShape` DOWN); linking needs `Protection.mayBuild`; break guard also covers the block under a locked door; `PistonStructureResolverMixin` (resolve fails if a locked door is in toPush/toDestroy – doors are POPPED, so `isPushable` alone doesn't help), `LockedDoorExplosionMixin` (own `@ModifyVariable` on `interactWithBlocks`, chains with `ServerExplosionMixin`), `BreakDoorGoalMixin` (zombies), `BlockBehaviourMixin` (`onPlace` of a new door drops a stale lock, `affectNeighborsAfterRemoval` deletes the lock); `/key new|copy` 10 s cooldown per UUID (ops exempt); `CraftingMenuMixin` + `CrafterBlockMixin`: keys are no crafting ingredient |
 | `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look/walk; chat and commands via message events), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`), `/playtime [player|top]`, `/afk` |
 | `display/JoinMessages.java`, `display/TabList.java`, `command/ChatDisplayCommands.java` | Vanilla join/leave suppressed via `ALLOW_GAME_MESSAGE` (translation keys), own templates with `{player}`; first join = `Stats.LEAVE_GAME == 0`; tab header/footer every 2 s with placeholders |
 | `command/RulesCommand.java` | `/rules`, `/regeln`, `accept`/`akzeptieren`, op `reset <player>` |
@@ -60,7 +60,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `mixin/BlockItemMixin.java`, `mixin/PlayerMixin.java` | Placement and hunger hooks (no Fabric event for them) |
 | `mixin/CommandsMixin.java` | `Commands.performCommand` HEAD: confined non-op players may only run `confinement.allowedCommands` |
 | `mixin/LevelMixin.java` | Adds `Level.getDifficulty()` override (vanilla only has the `LevelAccessor` default) |
-| `src/gametest/.../TownhallGameTests.java` | 36 GameTests |
+| `src/gametest/.../TownhallGameTests.java` | 43 GameTests |
 
 ## Core rules
 
@@ -94,7 +94,8 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 - Known gap: a few vanilla spots read `LevelData.getDifficulty()` directly (ender pearl endermites, nether portal piglins, creaking heart). Vanilla `/difficulty` resends the global value to clients (display only).
 
 **World rules** (`dimensions.<id>`: `difficulty`, `pvp`, `build`, `hunger`, `fallDamage`; null = vanilla)
-- `build: false`: operators exempt. Blocks break, `BlockItem.place`, world-changing items on blocks (buckets, flint, bone meal, spawn eggs, hanging/armor stand/crystal/minecart/boat items, `#axes/#shovels/#hoes`), hitting non-living entities or armor stands, using item frames/armor stands. Doors/buttons/containers stay usable.
+- `build: false`: operators exempt. Blocks break, `BlockItem.place`, world-changing items on blocks (buckets, flint, bone meal, spawn eggs, hanging/armor stand/crystal/minecart/boat items, dye, ink sacs, honeycomb, shears, brush, ender eye, potions, `#axes/#shovels/#hoes`), right-clicking signs, flower pots, repeaters, comparators, note blocks, daylight detectors (any hand), hitting non-living entities or armor stands, using item frames/armor stands, projectiles of non-building players on world objects and blocks (`ProjectileMixin`).
+- Usable blocks (`Protection.isUsableBlock`: hand-openable doors/trapdoors, fence gates, buttons, levers, beds, anything with `getMenuProvider`) return PASS when not sneaking, whatever the item: vanilla `ServerPlayerGameMode.useItemOn` runs the block's use first and these always consume the click, so the item never runs. Iron doors/trapdoors pass the click on, so they are not in that list.
 - Commands: `worldrule <dimension> [rule] [true|false|default]`, `worldrule <dimension> time [day|noon|night|midnight|<0-23999>|default]`, `worldrule <dimension> weather [clear|rain|thunder|default]`; saved to config, `DimensionSettings.rebuild` after every change.
 
 **Fixed time and weather** (`dimensions.<id>.time` / `.weather`)
@@ -125,6 +126,7 @@ The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `le
 **Builders** (`dimensions.<id>.builders`: UUID → name)
 - `Protection.mayBuild` = build rule || builder in this world || operator.
 - `/builder creative` sets the `townhall.builder_creative` tag. `Protection.enforceBuilderMode` (join, world change, respawn, after `remove`) puts non-op players back to survival if they have the tag or are a builder anywhere but not here, and resends builders' command tree.
+- `/townhall reload` calls `enforceBuilderMode` for all online players (builders removed in the file).
 - WorldEdit asks `FabricPermissionsProvider` first (Fabric permission API, `worldedit.a.b` → `worldedit:a.b`), then lucko v0, then op level. Our handler answers only for builders in their world, `null` otherwise.
 - World rules `mobs` (NaturalSpawner.spawnForChunk, BaseSpawner.serverTick, ServerLevel.tickCustomSpawners), `fire` (FireBlock.tick removes the fire), `explosions` (ServerExplosion.interactWithBlocks list → empty, chains with ChestLock's ModifyVariable), `leafDecay` (LeavesBlock.randomTick).
 - GameProfileArgument rejects `@s` ("selector includes entities"); tests use `@p[distance=..0.5]`.

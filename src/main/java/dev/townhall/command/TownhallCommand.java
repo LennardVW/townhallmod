@@ -347,6 +347,8 @@ public final class TownhallCommand {
 		if (!missing.isEmpty()) msg.append(" Not loaded: ").append(String.join(", ", missing)).append(". Loaded: ").append(TownhallMod.loadedDimensions(server)).append('.');
 		refreshCommands(server);
 		dev.townhall.display.DeathsInTab.apply(server);
+		// Builders removed in the file lose creative and WorldEdit right away, not only on their next world change.
+		server.getPlayerList().getPlayers().forEach(dev.townhall.protection.Protection::enforceBuilderMode);
 		ctx.getSource().sendSuccess(() -> Component.literal(msg.toString()).withStyle(missing.isEmpty() ? ChatFormatting.GREEN : ChatFormatting.YELLOW), true);
 		return 1;
 	}
