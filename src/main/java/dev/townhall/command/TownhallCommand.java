@@ -28,6 +28,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
+import net.minecraft.world.level.gamerules.GameRules;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -153,6 +154,8 @@ public final class TownhallCommand {
 				.then(Commands.literal("status").requires(op).executes(TownhallCommand::status))
 				.then(Commands.literal("afktime").requires(op)
 						.then(Commands.argument("minutes", IntegerArgumentType.integer(0, 1440)).executes(ActivityCommands::setAfkTime)))
+				.then(Commands.literal("sleep").requires(op).executes(TownhallCommand::showSleep)
+						.then(Commands.argument("percent", IntegerArgumentType.integer(0, 100)).executes(TownhallCommand::setSleep)))
 				.then(Commands.literal("deathsintab").requires(op)
 						.then(Commands.literal("on").executes(ctx -> setDeathsInTab(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setDeathsInTab(ctx, false))))
@@ -292,6 +295,33 @@ public final class TownhallCommand {
 		dev.townhall.display.DeathsInTab.apply(ctx.getSource().getServer());
 		if (!saveConfig(ctx.getSource())) return 0;
 		return ok(ctx.getSource(), on ? "Deaths are shown in the tab list." : "Deaths are no longer shown in the tab list.");
+	}
+
+	/**
+	 * sleep [0-100]: vanilla game rule players_sleeping_percentage (saved with the world, not in our config).
+	 * Vanilla counts per world: sleepers in a world against the players in that same world.
+	 */
+	private static int setSleep(CommandContext<CommandSourceStack> ctx) {
+		int percent = IntegerArgumentType.getInteger(ctx, "percent");
+		var server = ctx.getSource().getServer();
+		server.getGameRules().set(GameRules.PLAYERS_SLEEPING_PERCENTAGE, percent, server); // like /gamerule: notifies and updates
+		TownhallMod.LOGGER.info("Sleeping percentage set to {}", percent);
+		return showSleep(ctx);
+	}
+
+	private static int showSleep(CommandContext<CommandSourceStack> ctx) {
+		var server = ctx.getSource().getServer();
+		int percent = server.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
+		return ok(ctx.getSource(), "Sleeping: " + percent + "% of the players in a world must sleep to skip the night. " + sleepExample(server, percent));
+	}
+
+	private static String sleepExample(MinecraftServer server, int percent) {
+		String others = "Players in other worlds (e.g. the townhall) don't count.";
+		if (percent > 100) return "Nobody can skip the night. " + others;
+		long players = server.overworld().players().stream().filter(p -> !p.isSpectator()).count();
+		if (players == 0) return "Nobody is in the overworld right now. " + others;
+		long needed = Math.max(1, (long) Math.ceil(players * percent / 100.0)); // like vanilla SleepStatus.sleepersNeeded
+		return "Overworld now: " + needed + " of " + players + " must sleep. " + others;
 	}
 
 	private static int showWorldRules(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

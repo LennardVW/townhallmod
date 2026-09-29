@@ -24,7 +24,7 @@ import java.util.function.BiConsumer;
  * Operator-only, all saved to the config at once:
  * <pre>
  * /joinmessage join|leave|firstjoin &lt;text&gt;   server-wide texts, {player} = name; "-" = no message
- * /joinmessage set &lt;player&gt; &lt;text&gt;         personal join message
+ * /joinmessage set &lt;player&gt; &lt;text&gt;         personal join message; "-" = none for that player
  * /joinmessage reset &lt;player&gt;
  * /joinmessage on|off                       off = vanilla messages
  * /tablist header|footer &lt;text&gt;             "|" starts a new line; "-" = empty
@@ -76,11 +76,12 @@ public final class ChatDisplayCommands {
 
 	private static int setPersonal(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		String text = StringArgumentType.getString(ctx, "text");
+		boolean none = text.equals("-"); // like join/leave/firstjoin: stored empty, JoinMessages skips blank texts
 		for (NameAndId p : GameProfileArgument.getGameProfiles(ctx, "player")) {
-			TownhallMod.CONFIG.get().joinMessages.players.put(p.id().toString(), text);
+			TownhallMod.CONFIG.get().joinMessages.players.put(p.id().toString(), none ? "" : text);
 		}
 		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
-		return ok(ctx, Component.literal("Personal join message: ").withStyle(ChatFormatting.GREEN).append(Text.of(text)));
+		return ok(ctx, Component.literal("Personal join message: ").withStyle(ChatFormatting.GREEN).append(none ? Component.literal("none") : Text.of(text)));
 	}
 
 	private static int resetPersonal(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

@@ -6,7 +6,7 @@ Townhall fasst die Dinge zusammen, für die man sonst mehrere Plugins bräuchte:
 
 Die Mod läuft nur auf dem Server. Spieler joinen mit einem ganz normalen Minecraft-Client und müssen nichts installieren.
 
-Aktuelle Version: **1.13.0**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: **1.14.0**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -21,6 +21,7 @@ Aktuelle Version: **1.13.0**. Was sich wann geändert hat, steht in [CHANGELOG.m
   - [Orte per Befehl verwalten](#orte-per-befehl-verwalten)
   - [Regeln pro Welt](#regeln-pro-welt)
   - [Zeit und Wetter festhalten](#zeit-und-wetter-festhalten)
+  - [Schlafen](#schlafen)
   - [Bauer: Baurechte für einzelne Spieler](#bauer-baurechte-für-einzelne-spieler)
   - [Schlüssel für Türen](#schlüssel-für-türen)
   - [Nicknamen](#nicknamen)
@@ -49,6 +50,7 @@ Aktuelle Version: **1.13.0**. Was sich wann geändert hat, steht in [CHANGELOG.m
 | Eigene Orte | Beliebig viele Ziele mit eigenem Befehl, zum Beispiel `/arena` oder `/bunker`. Anlegen und ändern geht komplett per Befehl im Spiel. |
 | Regeln pro Welt | Schwierigkeit, PvP, Bauschutz, Hunger, Fallschaden, Mob-Spawn, Feuer, Explosionen und Laubzerfall lassen sich für jede Welt einzeln festlegen. |
 | Zeit und Wetter | Eine Welt kann dauerhaft Tag und trockenes Wetter haben, während die anderen Welten normal weiterlaufen. |
+| Schlafen | Admins legen fest, wie viel Prozent der Spieler schlafen müssen, damit die Nacht vorbei ist (zum Beispiel 50 %). |
 | Bauer | Einzelne Spieler dürfen in einer geschützten Welt bauen, selbst zwischen Creative und Survival wechseln und WorldEdit benutzen. |
 | Türschlösser | Mit einem benannten Schlüssel wird jede Tür abgeschlossen. Schlüssel lassen sich kopieren und weitergeben, Admins haben einen Generalschlüssel. |
 | Nicknamen | Admins vergeben Nicknamen (bis 32 Zeichen, mit Farben). Sie erscheinen im Chat, in der Tab-Liste und über dem Kopf. |
@@ -225,9 +227,9 @@ Jede Welt, auch die Welten anderer Mods, kann eigene Regeln bekommen. Den Weltna
 | `build` | Nur Admins und eingetragene Bauer dürfen Blöcke setzen oder abbauen, Eimer, Feuerzeug, Rahmen und Rüstungsständer benutzen, Schilder beschreiben oder färben, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke und Tageslichtsensoren verstellen, Farbstoff, Tintenbeutel, Honigwaben, Scheren, Pinsel, Enderaugen und Wasserflaschen auf Blöcke anwenden. Pfeile, Dreizacke und Schneebälle von anderen Spielern zerstören keine Rahmen, Bilder, Rüstungsständer, Boote, Loren oder Krüge und zünden kein TNT. Benutzbar bleiben Türen, Falltüren, Zauntore, Knöpfe, Hebel, Betten, Kisten und alle Blöcke mit Menü (Werkbank, Ofen, Amboss, Zaubertisch und so weiter), auch mit Werkzeug oder Eimer in der Hand. Wer schleicht, benutzt das Item statt des Blocks. |
 | `hunger` | Kein Hunger. Beim Betreten der Welt wird die Hungerleiste aufgefüllt. |
 | `fallDamage` | Kein Fallschaden. |
-| `mobs` | Mobs spawnen nicht von selbst, auch nicht aus Spawnern, als Patrouille oder als Phantom. Spawn-Eier und Befehle funktionieren weiter. |
+| `mobs` | Mobs spawnen nicht von selbst: nicht natürlich, nicht in neu erzeugten Chunks, nicht aus Spawnern und Trial-Spawnern, nicht als Patrouille, Phantom, Skelettpferd-Falle oder Piglin aus dem Netherportal. Überfälle (Raids) starten nicht, laufende hören auf. Spawn-Eier und Befehle funktionieren weiter. |
 | `fire` | Feuer geht sofort aus, breitet sich nicht aus und verbrennt nichts. |
-| `explosions` | Explosionen zerstören keine Blöcke. Schaden an Spielern und Mobs bleibt. |
+| `explosions` | Explosionen zerstören keine Blöcke und legen kein Feuer. Schaden an Spielern und Mobs bleibt. Windkugeln drücken weiter Knöpfe und öffnen Türen. |
 | `leafDecay` | Laub zerfällt nie. |
 
 Die Schwierigkeit kennt die Werte `peaceful`, `easy`, `normal`, `hard` und `default`. Sie wirkt auf Monster, Schaden, Hunger und Heilung in dieser Welt, und Spieler sehen im Menü die Schwierigkeit der Welt, in der sie gerade stehen.
@@ -247,6 +249,23 @@ Damit ist zum Beispiel im Rathaus immer Mittag und es regnet nie, während in de
 | `weather` | `clear` (nie Regen), `rain` (immer Regen), `thunder` (immer Gewitter), `default` |
 
 `/time set` und `/weather` wirken danach nur noch auf die anderen Welten. Dorfbewohner füllen ihren Handel trotzdem einmal pro Tag auf. Nether und End können kein Wetter haben; `time` funktioniert dagegen überall.
+
+In einer Welt mit fester Zeit oder festem Gewitter kann man nicht schlafen: Das Bett sagt wie am Tag „Du kannst nur nachts schlafen“. Sonst würde die Nacht für alle Welten übersprungen. Den Spawnpunkt setzt das Bett trotzdem. Beutetabellen und Bedingungen mit Uhrzeit (`time_check`) sehen die feste Zeit.
+
+### Schlafen
+
+Normalerweise müssen alle Spieler schlafen, damit die Nacht vorbei ist. Mit diesem Befehl reicht ein Teil davon:
+
+| Befehl | Was er macht |
+|---|---|
+| `/townhall sleep 50` | Die Hälfte der Spieler muss schlafen. Erlaubt ist `0` bis `100`; `100` ist der Minecraft-Standard (alle), bei `0` reicht ein Spieler. |
+| `/townhall sleep` | Zeigt den aktuellen Wert und wie viele Spieler gerade schlafen müssen |
+
+Beispiel mit 50 %: Sind 4 Spieler in der Oberwelt, müssen 2 schlafen. Bei 3 Spielern auch 2 (es wird aufgerundet), bei 1 Spieler 1.
+
+Gezählt werden nur die Spieler in der Oberwelt. Wer im Rathaus, in der Flatworld oder einer anderen Welt ist, zählt nicht mit und muss nicht schlafen. Zuschauer zählen auch nicht.
+
+Der Befehl stellt die Minecraft-Spielregel `players_sleeping_percentage` ein (dasselbe wie `/gamerule players_sleeping_percentage 50`). Der Wert wird mit der Welt gespeichert, nicht in `townhall.json`.
 
 ### Bauer: Baurechte für einzelne Spieler
 
@@ -299,7 +318,7 @@ Der Nickname erscheint im Chat, in der Tab-Liste, über dem Kopf des Spielers un
 
 ### AFK und Spielzeit
 
-Wer 5 Minuten lang nicht läuft, sich nicht umschaut und nichts schreibt, bekommt in der Tab-Liste ein graues `[AFK]`. Im Chat erscheint „Max ist jetzt AFK“ und später „Max ist zurück“.
+Wer 5 Minuten lang nicht läuft, sich nicht umschaut, nichts schreibt und keinen Befehl benutzt, bekommt in der Tab-Liste ein graues `[AFK]`. Geschoben werden zählt nicht: Wer nur von Wasser, Kolben, Mobs oder anderen Spielern bewegt wird, bleibt AFK. Im Chat erscheint „Max ist jetzt AFK“ und später „Max ist zurück“.
 
 `/playtime` zählt nur die Zeit, in der jemand nicht AFK ist. Spielzeit aus der Zeit vor der Mod übernimmt sie aus der Minecraft-Statistik.
 
@@ -316,7 +335,7 @@ Statt „Max joined the game“ schreibt der Server eigene Nachrichten. `{player
 | `/joinmessage join &a+ &f{player} &7ist AzubiCraft beigetreten.` | Nachricht beim Betreten |
 | `/joinmessage leave &c- &f{player} &7hat AzubiCraft verlassen.` | Nachricht beim Verlassen |
 | `/joinmessage firstjoin &6{player} ist zum ersten Mal hier!` | Nachricht beim allerersten Betreten |
-| `/joinmessage set Max &6Der Chef ist da!` | Eigene Join-Nachricht nur für Max |
+| `/joinmessage set Max &6Der Chef ist da!` | Eigene Join-Nachricht nur für Max (`-` = Max bekommt gar keine Join-Nachricht) |
 | `/joinmessage reset Max` | Max bekommt wieder die normale Nachricht |
 | `/joinmessage off` | Zurück zu den Minecraft-Nachrichten (`on` schaltet die eigenen wieder ein) |
 
@@ -328,7 +347,7 @@ Oben in der Tab-Liste steht **AzubiCraft** mit einer Begrüßung, unten stehen O
 |---|---|
 | `/tablist header &6&lAzubiCraft\|&7Hallo {player}!` | Kopfzeile setzen. `\|` beginnt eine neue Zeile, `-` bedeutet leer. |
 | `/tablist footer &7Online: {online}/{max}` | Fußzeile setzen |
-| `/tablist off` | Kopf- und Fußzeile ausschalten (`on` schaltet sie wieder ein) |
+| `/tablist off` | Kopf- und Fußzeile ausschalten (`on` schaltet sie wieder ein). Danach sendet die Mod nichts mehr, Tab-Listen anderer Mods bleiben stehen. |
 | `/townhall deathsintab off` | Todeszahl ausblenden (`on` zeigt sie wieder) |
 
 Platzhalter für Kopf- und Fußzeile: `{player}`, `{online}`, `{max}`, `{ping}`, `{playtime}`, `{world}`.
@@ -460,7 +479,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 |---|---|
 | Orte | `/<ort> send <spieler> [minuten]`, `/<ort> return <spieler>`, `/<ort> setspawn`, `/townhall status`, `/townhall debug <spieler>`, `/townhall clearreturn <spieler>`, `/townhall reload` |
 | Ortsverwaltung | `/location list`, `info`, `create <id> [prison]`, `delete`, `setspawn`, `set <id> <einstellung> <wert>` |
-| Welten | `/townhall difficulty <welt> [wert]`, `/townhall worldrule <welt> [regel] [wert]` |
+| Welten | `/townhall difficulty <welt> [wert]`, `/townhall worldrule <welt> [regel] [wert]`, `/townhall sleep [prozent]` |
 | Bauer | `/builder add <welt> <spieler>`, `/builder remove <welt> <spieler>`, `/builder list [welt]` |
 | Schlüssel | `/key admin`, `/key unlock` |
 | Nicknamen | `/nick set <spieler> <nick>`, `/nick reset <spieler>`, `/nick list` |
@@ -476,6 +495,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 - **Nicknamen:** Bei Spielern mit Nicknamen fehlen über dem Kopf Farbe, Präfix und Einstellungen von Scoreboard-Teams (`/team`); die Teams selbst funktionieren. Nicknamen mit Leerzeichen oder Zeichen wie `!` schlägt die Tab-Taste nicht vor. Nicknamen mit Leerzeichen gehen nur bei Befehlen für Online-Spieler (in Anführungszeichen).
 - **Schwierigkeit pro Welt:** Einige wenige Stellen im Spiel lesen weiterhin die Server-Schwierigkeit, etwa Endermiten aus Enderperlen oder Piglins aus Netherportalen.
 - **Wetter:** Welten ohne Wetter (Nether, End) können kein festes Wetter bekommen.
+- **Schlafen:** In einer Welt mit festem Gewitter kann man auch nachts nicht schlafen.
 - **Getestet:** Alle Funktionen haben automatische Tests auf einem echten Minecraft-Testserver. Nicht automatisch geprüft sind die Darstellung auf einem echten Client (Nickname über dem Kopf, Tab-Kopfzeile, Zeit und Wetter) sowie WorldEdit mit echten Bauern. Rückmeldungen dazu sind willkommen.
 
 ---
