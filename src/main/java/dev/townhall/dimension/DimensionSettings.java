@@ -18,6 +18,7 @@ import net.minecraft.world.clock.WorldClock;
 import net.minecraft.world.level.Level;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -130,17 +131,17 @@ public final class DimensionSettings {
 		return weather == null ? vanilla : weather.equals("thunder");
 	}
 
-	/**
-	 * Vanilla sends start/stop-rain packets from one world to every player on the server.
-	 * A player only gets them if neither the sending world nor the player's world has fixed weather, or both are the same world.
-	 */
-	public static boolean receivesWeatherFrom(ResourceKey<Level> playerWorld, ResourceKey<Level> source) {
-		if (playerWorld.equals(source)) return true;
-		return of(source).weather() == null && of(playerWorld).weather() == null;
-	}
-
 	public static boolean hasFixedWeather(ResourceKey<Level> dimension) {
 		return of(dimension).weather() != null;
+	}
+
+	/**
+	 * Sleeping in this world may move the shared clock. Not in a world with a fixed "time" rule (a fixed night would
+	 * let players skip everyone's time) or fixed thunder (the thunder that allows sleeping only exists in this world).
+	 */
+	public static boolean maySleep(ResourceKey<Level> dimension) {
+		Rules r = of(dimension);
+		return r.time() == null && !"thunder".equals(r.weather());
 	}
 
 	public static void sendToWorld(PlayerList players, Packet<?> packet, ResourceKey<Level> world) {
@@ -150,17 +151,41 @@ public final class DimensionSettings {
 	}
 
 	/**
-	 * After another world's weather packet went to everyone: players in a fixed-weather world get their own world's
-	 * state again (same tick, so nothing flickers). Keeps working when another mod replaced the broadcast.
+	 * Vanilla sends a world's start/stop-rain and rain/thunder level to every player on the server when its rain starts
+	 * or stops (not every tick). Right after such a broadcast, every player in another world whose own world looks
+	 * different gets that value of their own world again (same tick, so nothing flickers). This covers fixed-weather
+	 * worlds as well as a world that is still fading after its weather rule was removed. Keeps working when another mod
+	 * replaced the broadcast.
 	 */
-	public static void resendFixedWeather(PlayerList players, ResourceKey<Level> source) {
+	public static void resendOwnWeather(PlayerList players, Packet<?> broadcast, ResourceKey<Level> source) {
 		for (ServerPlayer player : players.getPlayers()) {
-			if (receivesWeatherFrom(player.level().dimension(), source)) continue;
-			Level level = player.level();
-			player.connection.send(new ClientboundGameEventPacket(level.isRaining() ? ClientboundGameEventPacket.START_RAINING : ClientboundGameEventPacket.STOP_RAINING, 0f));
-			player.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.RAIN_LEVEL_CHANGE, level.getRainLevel(1f)));
-			player.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.THUNDER_LEVEL_CHANGE, level.getThunderLevel(1f)));
+			if (player.level().dimension().equals(source)) continue;
+			for (Packet<?> fix : ownWeather(player.level(), broadcast)) player.connection.send(fix);
 		}
+	}
+
+	/** What a player in this world must get after another world's weather packet: nothing if it already matches. */
+	static List<Packet<?>> ownWeather(Level level, Packet<?> broadcast) {
+		boolean raining = level.isRaining();
+		float rain = level.getRainLevel(1f), thunder = level.getThunderLevel(1f);
+		if (broadcast instanceof ClientboundGameEventPacket event) {
+			var type = event.getEvent();
+			if (type == ClientboundGameEventPacket.START_RAINING || type == ClientboundGameEventPacket.STOP_RAINING) {
+				var own = raining ? ClientboundGameEventPacket.START_RAINING : ClientboundGameEventPacket.STOP_RAINING;
+				return own == type ? List.of() : List.of(new ClientboundGameEventPacket(own, 0f));
+			}
+			if (type == ClientboundGameEventPacket.RAIN_LEVEL_CHANGE) {
+				return event.getParam() == rain ? List.of() : List.of(new ClientboundGameEventPacket(type, rain));
+			}
+			if (type == ClientboundGameEventPacket.THUNDER_LEVEL_CHANGE) {
+				return event.getParam() == thunder ? List.of() : List.of(new ClientboundGameEventPacket(type, thunder));
+			}
+		}
+		// Unknown packet (another mod changed the broadcast): send the whole state.
+		return List.of(
+				new ClientboundGameEventPacket(raining ? ClientboundGameEventPacket.START_RAINING : ClientboundGameEventPacket.STOP_RAINING, 0f),
+				new ClientboundGameEventPacket(ClientboundGameEventPacket.RAIN_LEVEL_CHANGE, rain),
+				new ClientboundGameEventPacket(ClientboundGameEventPacket.THUNDER_LEVEL_CHANGE, thunder));
 	}
 
 	/** Entering a world: show its difficulty and time, fill up food where hunger is off. */

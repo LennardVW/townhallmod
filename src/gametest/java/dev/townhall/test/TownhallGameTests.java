@@ -547,7 +547,6 @@ public class TownhallGameTests {
 		net.minecraft.server.level.ServerLevel overworld = server.overworld();
 		console(server, "townhall worldrule minecraft:overworld time midnight");
 		try {
-			h.assertTrue(Math.floorMod(overworld.getDefaultClockTime(), 24000L) == 18000L, "overworld logic sees midnight");
 			var packet = DimensionSettings.timePacketFor(Level.OVERWORLD, server.clockManager().createFullSyncPacket());
 			h.assertFalse(packet.clockUpdates().isEmpty(), "time packet has clocks");
 			packet.clockUpdates().values().forEach(state -> {
@@ -578,10 +577,9 @@ public class TownhallGameTests {
 	public void fixedWeatherPerWorld(GameTestHelper h) {
 		MinecraftServer server = h.getLevel().getServer();
 		net.minecraft.server.level.ServerLevel overworld = server.overworld();
-		h.assertTrue(DimensionSettings.receivesWeatherFrom(Level.OVERWORLD, Level.OVERWORLD), "own world's weather arrives");
+		h.assertFalse(DimensionSettings.hasFixedWeather(Level.OVERWORLD), "normal weather at start");
 		console(server, "townhall worldrule minecraft:overworld weather rain");
-		h.assertFalse(DimensionSettings.receivesWeatherFrom(Level.END, Level.OVERWORLD), "fixed weather stays in its world");
-		h.assertFalse(DimensionSettings.receivesWeatherFrom(Level.OVERWORLD, Level.END), "other worlds' rain packets don't reach it");
+		h.assertTrue(DimensionSettings.hasFixedWeather(Level.OVERWORLD), "fixed weather set");
 		h.runAfterDelay(40, () -> {
 			boolean raining = overworld.isRaining(), thundering = overworld.isThundering();
 			console(server, "townhall worldrule minecraft:overworld weather clear");
@@ -590,7 +588,7 @@ public class TownhallGameTests {
 				boolean stillRaining = overworld.isRaining();
 				console(server, "townhall worldrule minecraft:overworld weather default");
 				h.assertFalse(stillRaining, "clear set: rain stopped");
-				h.assertTrue(DimensionSettings.receivesWeatherFrom(Level.END, Level.OVERWORLD), "normal weather after default");
+				h.assertFalse(DimensionSettings.hasFixedWeather(Level.OVERWORLD), "normal weather after default");
 				h.succeed();
 			});
 		});

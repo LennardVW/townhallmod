@@ -16,13 +16,13 @@ User-facing docs (German): `README.md`.
 | Loom | 1.18.2 (`net.fabricmc.fabric-loom`, `implementation` deps, no `mappings`) |
 | Java | 25 |
 
-Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Everything else uses Fabric API events.
+Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`, sleep skip guards, `mobs` for custom spawners and skeleton horse traps), `TimeCheckMixin` (fixed `time` for loot `time_check`), `BedSleepMixin` (no sleeping in fixed-time/thunder worlds), `CommandActivityMixin` (commands end AFK), world-rule mixins listed under Builders/world rules. Everything else uses Fabric API events.
 
 ## Commands
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 49 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 58 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
 ```
 
@@ -31,7 +31,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | File | Job |
 |---|---|
 | `TownhallMod.java` | Entrypoint: loads config, registers commands and events (server tick, respawn, join, level change), logs dimension status |
-| `command/TownhallCommand.java` | Builds one Brigadier root per location (`build(command, id)`), all subcommands, cooldown, permission check |
+| `command/TownhallCommand.java` | Builds one Brigadier root per location (`build(command, id)`), all subcommands, cooldown, permission check; `sleep [0-100]` sets vanilla `GameRules.PLAYERS_SLEEPING_PERCENTAGE` via `server.getGameRules().set(rule, value, server)` (same path as `/gamerule`, saved with the world, not our config) |
 | `config/TownhallConfig.java` | Config model + `validate()` (returns a list of errors) |
 | `config/ConfigManager.java` | Load/reload/save `config/townhall.json`; atomic save (plain move if the FS can't); invalid file never replaces the active config; `save()` returns false and writes nothing while the last load failed (`canSave()`), so the admin's broken file is never overwritten |
 | `storage/ReturnLocation.java` | Record: dimension, x/y/z, yaw, pitch, timestamp, optional name (debug only). Codec |
@@ -53,8 +53,8 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `nick/NickPackets.java` | Name above the head = team prefix + profile name. For other viewers the profile name becomes an invisible per-UUID token (`§r` + 6 color codes, 14 chars) and a client-only team `th_nick_<uuid8>` carries the full nickname as prefix (32 chars, colors). Score/team packets are renamed real name → token. Teams sent on join/leave/`refresh`; `refresh` re-sends the player (TrackedEntityMixin despawn/respawn) |
 | `command/NickCommand.java` | `/nick set|reset|list` (op); rejects empty, > 32 chars, and names of other players/nicks (color codes ignored) |
 | `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors |
-| `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look/walk; chat and commands via message events), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`), `/playtime [player|top]`, `/afk` |
-| `display/JoinMessages.java`, `display/TabList.java`, `command/ChatDisplayCommands.java` | Vanilla join/leave suppressed via `ALLOW_GAME_MESSAGE` (translation keys), own templates with `{player}`; first join = `Stats.LEAVE_GAME == 0`; tab header/footer every 2 s with placeholders |
+| `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look, or position change while a movement key is held in `ServerPlayer.getLastClientInput()` – pushing by water/pistons/mobs/players/knockback has no input and doesn't count; chat via `CHAT_MESSAGE`, every command via `CommandActivityMixin` at `Commands.performCommand` HEAD except `/afk` itself), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`), `/playtime [player|top]`, `/afk` |
+| `display/JoinMessages.java`, `display/TabList.java`, `command/ChatDisplayCommands.java` | Vanilla join/leave suppressed via `ALLOW_GAME_MESSAGE` (translation keys), own templates with `{player}`; first join = `Stats.LEAVE_GAME == 0`; tab header/footer every 2 s with placeholders; `enabled: false` sends one empty header/footer when switching off, then nothing (other mods' tab lists survive); `/joinmessage set <player> -` stores "" = no join message |
 | `command/RulesCommand.java` | `/rules`, `/regeln`, `accept`/`akzeptieren`, op `reset <player>` |
 | `util/Text.java` | `&` color codes → legacy §, title packets |
 | `mixin/BlockItemMixin.java`, `mixin/PlayerMixin.java` | Placement and hunger hooks (no Fabric event for them) |
@@ -62,6 +62,8 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `mixin/CommandSourceStackAccessor.java` | Reads the private `CommandSourceStack.source` (player, console, sign = `CommandSource.NULL`, command block) for `isOperatorSelf` |
 | `mixin/LevelMixin.java` | Adds `Level.getDifficulty()` override (vanilla only has the `LevelAccessor` default) |
 | `src/gametest/.../TownhallGameTests.java` | 49 GameTests |
+| `src/gametest/.../WorldRulesGameTests.java` | 9 GameTests for 1.14.0 (sleep percentage, sleeping in fixed worlds, weather leak, all mob spawn paths, explosion fire/triggers, AFK pushing/commands, `time_check`, join message `-`, tab list off) |
+| `src/gametest/.../PacketLog.java` + `mixin/PacketLogMixin` | Records packets sent to watched players (`PacketLog.watch(uuid)`), for packet-level assertions |
 
 ## Core rules
 
@@ -100,10 +102,12 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 
 **Fixed time and weather** (`dimensions.<id>.time` / `.weather`)
 - 26.x has no per-world time: all worlds read shared `WorldClock`s (`ServerClockManager`, one per server) through their dimension type's `defaultClock`, and one shared `WeatherData`.
-- Server side time: `EnvironmentAttributeSystemMixin` redirects `Level.clockManager()` in `addDynamicLayers` to a `FixedClockManager` (sky light, monster spawning, sleeping etc. are sampled through it); `LevelMixin` pins `getDefaultClockTime()`. The rule is read per call, so changes apply next tick.
+- Server side time: `EnvironmentAttributeSystemMixin` wraps `Level.clockManager()` in `addDynamicLayers` with a `FixedClockManager` (sky light, monster spawning, darkness for beds etc. are sampled through it); `TimeCheckMixin` pins the clock read of loot `time_check`. Nothing calls `Level.getDefaultClockTime()` on the server (villagers read `clockManager()` directly and are not pinned). The rule is read per call, so changes apply next tick.
+- Sleeping: a fixed night (or fixed thunder) makes the world dark, and a night skip moves the **shared** clock and ends the **shared** rain. So `BedSleepMixin` makes `BedRule.canSleep` false in worlds where `DimensionSettings.maySleep` is false (fixed `time`, or `weather: thunder`); the spawn point is set before that check. `ServerLevelMixin` also skips `moveToTimeMarker` (those worlds) and `resetWeatherCycle` (any fixed-weather world) in `ServerLevel.tick`.
+- Sleep percentage is vanilla: per world, sleepers in that world vs. non-spectator players in that world (`SleepStatus`). Players in other worlds don't count.
 - `DimensionSettings.pin(ticks, timeOfDay)` keeps the day count (villager restocks, moon phase still advance daily).
 - Client side time: `ServerCommonPacketListenerImplMixin` rewrites every `ClientboundSetTimePacket` to a player in a fixed-time world (all clocks pinned, rate 0). `syncClient` resends the full sync on join, world change, respawn and rule changes.
-- Weather: `ServerLevelMixin` replaces the second `WeatherData.isRaining()/isThundering()` read in `advanceWeatherCycle` (the one that moves the world's rain/thunder level), so rain fades in/out naturally and the shared timers keep running. Vanilla sends start/stop-rain to *all* players; the redirect only sends them where `receivesWeatherFrom` allows.
+- Weather: `ServerLevelMixin` replaces the second `WeatherData.isRaining()/isThundering()` read in `advanceWeatherCycle` (the one that moves the world's rain/thunder level), so rain fades in/out naturally and the shared timers keep running. Vanilla sends a world's start/stop-rain + rain/thunder level to *all* players when its rain flips (per-tick levels only go to that world). The `broadcastAll` wrap sends a fixed-weather world's packets only to its own players; after any other world's broadcast, `resendOwnWeather` gives every player in another world their own world's value where it differs (also covers a world still fading after its weather rule was removed).
 - Known gap: the dimension must be able to have weather (`canHaveWeather`, false for Nether/End); `time` works everywhere.
 
 **Onboarding**
@@ -131,7 +135,7 @@ The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `le
 - `Protection.mayBuild` = build rule || builder in this world || operator.
 - `/builder creative` sets the `townhall.builder_creative` tag. `Protection.enforceBuilderMode` (join, world change, respawn, after `remove`) puts non-op players back to survival if they have the tag or are a builder anywhere but not here, and resends builders' command tree.
 - WorldEdit asks `FabricPermissionsProvider` first (Fabric permission API, `worldedit.a.b` → `worldedit:a.b`), then lucko v0, then op level. Our handler answers only for builders in their world, `null` otherwise.
-- World rules `mobs` (NaturalSpawner.spawnForChunk, BaseSpawner.serverTick, ServerLevel.tickCustomSpawners), `fire` (FireBlock.tick removes the fire), `explosions` (ServerExplosion.interactWithBlocks list → empty, chains with ChestLock's ModifyVariable), `leafDecay` (LeavesBlock.randomTick).
+- World rules `mobs` (NaturalSpawner.spawnForChunk + spawnMobsForChunkGeneration, BaseSpawner.serverTick, TrialSpawner.canSpawnInLevel/spawnMob, ServerLevel.tickCustomSpawners, skeleton horse in ServerLevel.tickThunder, NetherPortalBlock.randomTick, Raids.createOrExtendRaid → null, Raid.tick → stop), `fire` (FireBlock.tick removes the fire), `explosions` (ServerExplosion.interactWithBlocks list → empty only for DESTROY/DESTROY_WITH_DECAY, so wind charges still trigger buttons/doors; createFire list → empty; both `@ModifyVariable`, chaining with other mods and LockedDoorExplosionMixin), `leafDecay` (LeavesBlock.randomTick).
 - GameProfileArgument rejects `@s` ("selector includes entities"); tests use `@p[distance=..0.5]`.
 
 ## Rules – don't break these
@@ -173,4 +177,6 @@ new feature → minor (1.3.0 → 1.4.0), bug fix only → patch (1.3.0 → 1.3.1
 - Command blocking is tested with a stand-in command (`escapetest`) registered on the live dispatcher.
 - Sign clicks are simulated with the same source vanilla builds (`clickSign`: `CommandSource.NULL`, GAMEMASTER, player as entity).
 - Tests that reload the live config first `save()`, keep the file text, and in `finally` write it back and run `/townhall reload` (a failed reload pauses saving). `Capture` collects what a command tells its sender.
+- Tests that change overworld rules (`WorldRulesGameTests.withRules`) do it synchronously and restore in the same tick, because `fixedTimePerWorld`/`fixedWeatherPerWorld` run in parallel on the overworld. Environment attributes are cached per tick: call `environmentAttributes().invalidateTickCache()` + `updateSkyBrightness()` to see a change at once. The GameTest server has `spawn_mobs` off; mob tests set it on temporarily.
+- Lazily loaded mixin targets only the GameTests exercise: `TrialSpawner`, `NetherPortalBlock`, `Raids`/`Raid`, `TimeCheck`, `ServerExplosion` (the dedicated-server boot doesn't load them).
 - Not covered: real vanilla client, real death/respawn (the test calls `keepConfined` directly), difficulty display on a real client.

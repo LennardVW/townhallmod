@@ -2,6 +2,17 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.14.0
+- Neu: `/townhall sleep <0-100>` legt fest, wie viel Prozent der Spieler schlafen müssen, damit die Nacht vorbei ist. Bei 50 % und 4 Spielern in der Oberwelt reichen 2. Spieler in anderen Welten (Rathaus, Flatworld) zählen nicht mit. `/townhall sleep` zeigt den Wert.
+- Fix: In einer Welt mit fester Nacht oder festem Gewitter kann man nicht mehr schlafen. Vorher wurde dadurch die Zeit in allen Welten vorgespult und der Regen überall beendet. Das Bett setzt weiter den Spawnpunkt.
+- Fix: Wird die Wetter-Regel einer Welt aufgehoben, bekommen Spieler in anderen Welten nicht mehr deren Regen angezeigt.
+- Fix: `mobs false` gilt jetzt auch für Tiere in neu erzeugten Chunks, Trial-Spawner, Skelettpferd-Fallen, Piglins aus Netherportalen und Überfälle (Raids).
+- Fix: `explosions false` verhindert auch das Feuer von Explosionen. Windkugeln drücken dort wieder Knöpfe und öffnen Türen.
+- Fix: Wer nur geschoben wird (Wasser, Kolben, Mobs, andere Spieler), wird trotzdem AFK. Jeder Befehl zählt als aktiv, nicht nur `/me` und `/say`.
+- Fix: Beutetabellen und Bedingungen mit Uhrzeit (`time_check`) sehen in einer Welt mit fester Zeit diese Zeit.
+- Fix: `/joinmessage set <spieler> -` bedeutet jetzt „keine Join-Nachricht“ statt eines „-“ im Chat.
+- Fix: `/tablist off` löscht Kopf- und Fußzeile nur einmal und schickt danach nichts mehr, sodass Tab-Listen anderer Mods stehen bleiben.
+
 ## 1.12.1
 - Fix: Befehle auf Schildern laufen mit den Rechten des Spielers. Ein Schild mit `/townhall return` holt keine Gefangenen mehr heraus, öffnet keine Admin-Orte und umgeht weder Wartezeit noch die Befehlssperre.
 - Fix: Ist `config/townhall.json` fehlerhaft (beim Start oder nach `/townhall reload`), überschreiben Befehle die Datei nicht mehr, sondern melden „Config not saved“. Schreibfehler werden ebenfalls gemeldet statt „gespeichert“.
