@@ -2,6 +2,15 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.12.2
+- Fix: Türen abschließen geht nur noch dort, wo man bauen darf. Fremde öffentliche Türen in Welten mit `build false` bleiben offen.
+- Fix: Abgeschlossene Türen lassen sich nicht mehr umgehen: Block darunter abbauen, Kolben, Explosionen und Zombies zerstören sie nicht. Eine neue Tür erbt kein altes Schloss.
+- Fix: `/townhall reload` nimmt entfernten Bauern sofort Creative weg.
+- Fix: `build false` schützt jetzt auch Schilder, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke, Tageslichtsensoren, Farbstoff, Scheren, Pinsel und Ähnliches, und Pfeile anderer Spieler zerstören keine Rahmen, Bilder oder Krüge mehr.
+- Fix: Mit Werkzeug oder Eimer in der Hand lassen sich Türen, Kisten und Knöpfe in `build false`-Welten wieder benutzen.
+- Fix: Bauer dürfen keine CraftScripts, kein `setnbt` und kein Schematic-Löschen in WorldEdit.
+- Fix: `/key new` und `/key copy` haben 10 Sekunden Wartezeit, und Schlüssel lassen sich nicht mehr verbauen (Fallenkiste, Armbrust).
+
 ## 1.12.1
 - Fix: Befehle auf Schildern laufen mit den Rechten des Spielers. Ein Schild mit `/townhall return` holt keine Gefangenen mehr heraus, öffnet keine Admin-Orte und umgeht weder Wartezeit noch die Befehlssperre.
 - Fix: Ist `config/townhall.json` fehlerhaft (beim Start oder nach `/townhall reload`), überschreiben Befehle die Datei nicht mehr, sondern melden „Config not saved“. Schreibfehler werden ebenfalls gemeldet statt „gespeichert“.

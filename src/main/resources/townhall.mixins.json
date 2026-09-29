@@ -2,7 +2,7 @@
 	"required": true,
 	"package": "dev.townhall.mixin",
 	"compatibilityLevel": "JAVA_25",
-	"mixins": ["BlockItemMixin", "CommandsMixin", "EnvironmentAttributeSystemMixin", "LevelMixin", "PlayerMixin", "ServerCommonPacketListenerImplMixin", "ServerLevelMixin", "ServerPlayerMixin", "PlayerInfoUpdatePacketAccessor", "SetPlayerTeamPacketInvoker", "ChunkMapAccessor", "TrackedEntityMixin", "DoorBlockMixin", "NaturalSpawnerMixin", "BaseSpawnerMixin", "FireBlockMixin", "ServerExplosionMixin", "LeavesBlockMixin", "CommandSourceStackAccessor"],
+	"mixins": ["BlockItemMixin", "CommandsMixin", "EnvironmentAttributeSystemMixin", "LevelMixin", "PlayerMixin", "ServerCommonPacketListenerImplMixin", "ServerLevelMixin", "ServerPlayerMixin", "PlayerInfoUpdatePacketAccessor", "SetPlayerTeamPacketInvoker", "ChunkMapAccessor", "TrackedEntityMixin", "DoorBlockMixin", "NaturalSpawnerMixin", "BaseSpawnerMixin", "FireBlockMixin", "ServerExplosionMixin", "LeavesBlockMixin", "BlockBehaviourMixin", "PistonStructureResolverMixin", "LockedDoorExplosionMixin", "BreakDoorGoalMixin", "CraftingMenuMixin", "CrafterBlockMixin", "ProjectileMixin", "CommandSourceStackAccessor"],
 	"injectors": {
 		"defaultRequire": 1
 	}

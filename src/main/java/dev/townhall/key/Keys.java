@@ -1,6 +1,7 @@
 package dev.townhall.key;
 
 import dev.townhall.TownhallMod;
+import dev.townhall.protection.Protection;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.ChatFormatting;
@@ -32,6 +33,10 @@ import java.util.UUID;
  * Right-click an unlinked door with a key: the door is linked to that key. Linked doors open only for players who
  * carry a key with the same id (copies share the id) or an operator holding the admin key. Sneak + right-click with
  * the key unlinks the door. Redstone and mobs can't open linked doors (DoorBlockMixin).
+ * Linking needs build rights at the door (Protection.mayBuild), so nobody locks public doors in build:false worlds.
+ * A locked door can't be removed around the lock: it keeps standing without its support block (DoorBlockMixin),
+ * pistons can't push or pop it (PistonStructureResolverMixin), explosions skip it (LockedDoorExplosionMixin), zombies can't break it
+ * (BreakDoorGoalMixin). Any lock whose door block goes away is deleted, and a new door never inherits an old lock.
  */
 public final class Keys {
 
@@ -46,7 +51,8 @@ public final class Keys {
 			return onUseDoor(sp, (ServerLevel) level, hit.getBlockPos());
 		});
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> {
-			if (!(player instanceof ServerPlayer sp) || !(state.getBlock() instanceof DoorBlock)) return true;
+			if (!(player instanceof ServerPlayer sp)) return true;
+			if (!(state.getBlock() instanceof DoorBlock)) return maySupportBreak(sp, (ServerLevel) level, pos);
 			BlockPos lower = lowerHalf(pos, state);
 			Optional<DoorLocks.Lock> lock = lockAt((ServerLevel) level, lower);
 			if (lock.isEmpty()) return true;
@@ -57,6 +63,17 @@ public final class Keys {
 			DoorLocks.get(sp.level().getServer()).remove(level.dimension(), lower);
 			return true;
 		});
+	}
+
+	/** The block right under a locked door: only players who may open the door (or operators) break it. */
+	private static boolean maySupportBreak(ServerPlayer player, ServerLevel level, BlockPos pos) {
+		BlockPos above = pos.above();
+		BlockState door = level.getBlockState(above);
+		if (!(door.getBlock() instanceof DoorBlock) || door.getValue(DoorBlock.HALF) != DoubleBlockHalf.LOWER) return true;
+		Optional<DoorLocks.Lock> lock = lockAt(level, above);
+		if (lock.isEmpty() || mayOpen(player, lock.get()) || TownhallMod.isOperator(player.permissions())) return true;
+		player.sendOverlayMessage(Component.literal("This block holds a locked door. You need the key \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
+		return false;
 	}
 
 	// ------------------------------------------------------------ items
@@ -117,6 +134,17 @@ public final class Keys {
 		return data != null && data.copyTag().getString(ADMIN_TAG).isPresent();
 	}
 
+	/** Any key (normal or admin). Cheap item check first: only runs when a crafting grid changes. */
+	public static boolean isKey(ItemStack stack) {
+		return stack.is(Items.TRIPWIRE_HOOK) && stack.has(DataComponents.CUSTOM_DATA) && (keyId(stack).isPresent() || isAdminKey(stack));
+	}
+
+	/** Keys are free (/key new), so they must not become tripwire hooks for trapped chests or crossbows. */
+	public static boolean containsKey(List<ItemStack> items) {
+		for (ItemStack stack : items) if (isKey(stack)) return true;
+		return false;
+	}
+
 	// ------------------------------------------------------------ doors
 
 	static BlockPos lowerHalf(BlockPos pos, BlockState state) {
@@ -132,6 +160,24 @@ public final class Keys {
 			return Optional.empty();
 		}
 		return lock;
+	}
+
+	/** A door's lower half was replaced by another block (any cause): its lock goes with it. */
+	public static void onDoorRemoved(ServerLevel level, BlockPos pos, BlockState oldState) {
+		if (oldState.getValue(DoorBlock.HALF) != DoubleBlockHalf.LOWER) return;
+		DoorLocks locks = DoorLocks.get(level.getServer());
+		if (locks.size() > 0 && locks.remove(level.dimension(), pos)) {
+			TownhallMod.LOGGER.info("Removed the lock of the door at {} in {}: the door is gone", pos.toShortString(), level.dimension().identifier());
+		}
+	}
+
+	/** A new door was placed (lower half, not just opened or closed): it never inherits a stale lock from an old door there. */
+	public static void onDoorPlaced(ServerLevel level, BlockPos pos, BlockState state, BlockState oldState) {
+		if (state.getValue(DoorBlock.HALF) != DoubleBlockHalf.LOWER || oldState.is(state.getBlock())) return;
+		DoorLocks locks = DoorLocks.get(level.getServer());
+		if (locks.size() > 0 && locks.remove(level.dimension(), pos)) {
+			TownhallMod.LOGGER.info("Dropped a stale lock at {} in {}: a new door was placed there", pos.toShortString(), level.dimension().identifier());
+		}
 	}
 
 	/** Lock of the door at any half; used by the door mixin (redstone, mobs). */
@@ -159,6 +205,11 @@ public final class Keys {
 
 		if (lock.isEmpty()) {
 			if (heldKey.isEmpty()) return InteractionResult.PASS;
+			if (!Protection.mayBuild(player)) {
+				// No build rights here (public door, build:false world): the door just works like a normal door.
+				player.sendOverlayMessage(Component.literal("You can't lock doors here.").withStyle(ChatFormatting.RED));
+				return InteractionResult.PASS;
+			}
 			DoorLocks.get(level.getServer()).put(level.dimension(), lower, new DoorLocks.Lock(heldKey.get().toString(), keyName(held),
 					player.getUUID().toString(), player.getGameProfile().name()));
 			TownhallMod.LOGGER.info("{} locked the door at {} in {} with key {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier(), keyName(held));
