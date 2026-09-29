@@ -7,7 +7,7 @@
 	"environment": "*",
 	"entrypoints": {
 		"preLaunch": ["dev.townhall.test.FreshTestRun"],
-		"fabric-gametest": ["dev.townhall.test.TownhallGameTests", "dev.townhall.test.WorldRulesGameTests"]
+		"fabric-gametest": ["dev.townhall.test.TownhallGameTests", "dev.townhall.test.WorldRulesGameTests", "dev.townhall.test.PerformanceGameTests"]
 	},
 	"mixins": ["townhall-gametest.mixins.json"],
 	"depends": { "townhall": "*" }

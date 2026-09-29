@@ -46,3 +46,15 @@ fabricApi {
 		eula = true
 	}
 }
+
+// Benchmark GameTest (PerfBench): only registered and run with ./gradlew runGameTest -Dtownhall.bench=true
+def benchOn = providers.systemProperty("townhall.bench").map { it == "true" }.getOrElse(false)
+processGametestResources {
+	inputs.property "bench", benchOn
+	filesMatching("fabric.mod.json") {
+		filter { line -> benchOn && line.contains('"fabric-gametest"') ? line.replace('"]', '", "dev.townhall.test.PerfBench"]') : line }
+	}
+}
+tasks.named("runGameTest") {
+	if (benchOn) jvmArgs("-Dtownhall.bench=true")
+}
