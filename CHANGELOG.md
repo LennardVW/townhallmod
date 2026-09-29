@@ -2,6 +2,14 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.14.1
+- Schneller: Die Suche nach einem sicheren Platz beim Zurückkehren (`return`) braucht im schlimmsten Fall (Radius 16, kein sicherer Platz) etwa 3 ms statt 37 ms. Gefunden wird genau derselbe Platz wie vorher.
+- Schneller: `/playtime top` sortiert nicht mehr alle Spieler, sondern merkt sich nur die besten 10 (10 000 Spieler: 0,04 ms statt 1,5 ms).
+- Schneller: Farbcodes in Texten (`&6` usw.), Tab-Liste, WorldEdit-Rechte für Nicht-Builder, Schlüssel-Suche im Inventar und Türen, wenn es keine abgeschlossenen gibt.
+- Die Prüfung einmal pro Sekunde (Gefängnis, Zeitstrafen) schaut nur noch auf Spieler, die wirklich festgehalten werden oder einen Timer haben. AFK/Spielzeit läuft eine halbe Sekunde versetzt dazu, damit nicht beides im selben Tick passiert.
+- Zeitstrafen und Spielzeit zählen mit einer Uhr, die sich nicht verstellen lässt: Wird die Systemzeit geändert, geht keine Zeit verloren und es kommt keine dazu.
+- Die Spielzeit-Datei wird nur noch als geändert markiert, wenn sich wirklich etwas geändert hat (z. B. nicht, wenn alle AFK sind).
+
 ## 1.14.0
 - Neu: `/townhall sleep <0-100>` legt fest, wie viel Prozent der Spieler schlafen müssen, damit die Nacht vorbei ist. Bei 50 % und 4 Spielern in der Oberwelt reichen 2. Spieler in anderen Welten (Rathaus, Flatworld) zählen nicht mit. `/townhall sleep` zeigt den Wert.
 - Fix: In einer Welt mit fester Nacht oder festem Gewitter kann man nicht mehr schlafen. Vorher wurde dadurch die Zeit in allen Welten vorgespult und der Regen überall beendet. Das Bett setzt weiter den Spawnpunkt.

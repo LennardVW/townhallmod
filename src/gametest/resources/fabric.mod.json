@@ -6,7 +6,7 @@
 	"description": "Townhall tests; the Nether stands in for the multiworld Townhall dimension.",
 	"environment": "*",
 	"entrypoints": {
-		"fabric-gametest": ["dev.townhall.test.TownhallGameTests", "dev.townhall.test.WorldRulesGameTests"]
+		"fabric-gametest": ["dev.townhall.test.TownhallGameTests", "dev.townhall.test.WorldRulesGameTests", "dev.townhall.test.PerformanceGameTests"]
 	},
 	"mixins": ["townhall-gametest.mixins.json"],
 	"depends": { "townhall": "*" }

@@ -28,9 +28,10 @@ public final class BuilderPermissions {
 	}
 
 	private static <T> T handle(PermissionContext context, PermissionNode<T> node) {
+		// Cheap builder check first: for everyone else (almost every request) no string work at all.
+		if (!(context.get(PermissionContext.ENTITY) instanceof ServerPlayer player) || !Protection.isBuilderHere(player)) return null;
 		String path = worldEditPath(node.key());
 		if (path == null || isDenied(path)) return null;
-		if (!(context.get(PermissionContext.ENTITY) instanceof ServerPlayer player) || !Protection.isBuilderHere(player)) return null;
 		try {
 			return node.cast(Boolean.TRUE);
 		} catch (RuntimeException notABooleanNode) {
@@ -46,6 +47,10 @@ public final class BuilderPermissions {
 	}
 
 	static boolean isDenied(String path) {
-		return DENIED.stream().anyMatch(d -> path.equals(d) || path.startsWith(d + "."));
+		for (String d : DENIED) {
+			// path is d itself or starts with "d." (checked without building "d." each time)
+			if (path.startsWith(d) && (path.length() == d.length() || path.charAt(d.length()) == '.')) return true;
+		}
+		return false;
 	}
 }
