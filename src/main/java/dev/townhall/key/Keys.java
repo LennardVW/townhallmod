@@ -154,6 +154,7 @@ public final class Keys {
 	/** Lock of the door whose lower half is here; drops the entry if the door is gone. */
 	public static Optional<DoorLocks.Lock> lockAt(ServerLevel level, BlockPos lower) {
 		DoorLocks locks = DoorLocks.get(level.getServer());
+		if (locks.size() == 0) return Optional.empty(); // most servers have no locks: DoorBlockMixin asks on every neighbor update
 		Optional<DoorLocks.Lock> lock = locks.get(level.dimension(), lower);
 		if (lock.isPresent() && !(level.getBlockState(lower).getBlock() instanceof DoorBlock)) {
 			locks.remove(level.dimension(), lower);
@@ -186,8 +187,17 @@ public final class Keys {
 				&& lockAt(server, lowerHalf(pos, state)).isPresent();
 	}
 
+	/**
+	 * Compares each stack's custom data with a prebuilt {townhall_key: id} tag (CustomData.matchedBy reads in place),
+	 * instead of copying the whole custom data of every stack. Our keys always store UUID.toString().
+	 */
 	public static boolean carriesKey(Player player, UUID keyId) {
-		return player.getInventory().contains(stack -> keyId(stack).filter(keyId::equals).isPresent());
+		CompoundTag wanted = new CompoundTag();
+		wanted.putString(KEY_TAG, keyId.toString());
+		return player.getInventory().contains(stack -> {
+			CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+			return data != null && data.matchedBy(wanted);
+		});
 	}
 
 	public static boolean mayOpen(ServerPlayer player, DoorLocks.Lock lock) {

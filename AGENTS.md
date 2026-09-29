@@ -22,9 +22,12 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 74 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 79 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
+./gradlew runGameTest -Dtownhall.bench=true   # + PerfBench (80 tests); numbers in build/run/gameTest/perf-bench.txt
 ```
+
+The benchmark (`PerfBench`) is only registered with `-Dtownhall.bench=true`: `build.gradle` then adds it to the gametest entrypoints (`processGametestResources`) and passes the property to the game JVM. Compare numbers only between runs on the same machine; run it before and after a change.
 
 ## Files
 
@@ -36,10 +39,10 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `config/ConfigManager.java` | Load/reload/save `config/townhall.json`; atomic save (plain move if the FS can't); invalid file never replaces the active config; `save()` returns false and writes nothing while the last load failed (`canSave()`), so the admin's broken file is never overwritten |
 | `storage/ReturnLocation.java` | Record: dimension, x/y/z, yaw, pitch, timestamp, optional name (debug only). Codec |
 | `storage/PlayerState.java` | Record: `returnPosition`, `location` (last location id), `confined`, `remainingMillis` (timed stay) |
-| `storage/ReturnPositionStorage.java` | `SavedData` with `Map<UUID, PlayerState>`, via `server.getDataStorage()` → `<world>/data/townhall/players.dat` |
+| `storage/ReturnPositionStorage.java` | `SavedData` with `Map<UUID, PlayerState>`, via `server.getDataStorage()` → `<world>/data/townhall/players.dat`; keeps an index of active (confined/timed) UUIDs in step in `set`/`remove`/`releaseConfinedAt`/load, so `activePlayers()` doesn't scan all states |
 | `teleport/TeleportService.java` | `sendTo`, `returnPlayer`, `keepConfined`, `sendToFallback`; the only place that teleports |
-| `teleport/SafeLocationFinder.java` | Safety check and nearest-safe-spot search in a small box |
-| `teleport/ConfinementService.java` | Once per second (only active players): count down timers, release, pull escaped confined players back; respawn handling |
+| `teleport/SafeLocationFinder.java` | Safety check and nearest-safe-spot search in a small box: walks a cached nearest-first offset table (same order as the old sorted list, ties dx→dz→dy), `AirMap` (one bit per block, loaded chunks only) lets all-air ground boxes skip the block part of `noCollision` |
+| `teleport/ConfinementService.java` | Once per second (only active players): count down timers, release, pull escaped confined players back; respawn handling; elapsed time from `System.nanoTime`, clamped to 0–5 s; `reset()` on `SERVER_STARTED` (registered by `ActivityService`) |
 | `dimension/DimensionSettings.java` | Prebuilt `ResourceKey → Rules(difficulty, pvp, build, hunger, fallDamage, time, weather)` map from `dimensions`; difficulty + time packets (`syncClient`); weather overrides and packet filter; food refill on enter |
 | `dimension/FixedClockManager.java` | Wraps a server world's clocks; stopped at the fixed time when the world has a `time` rule |
 | `protection/Protection.java` | Fabric events: ALLOW_DAMAGE (pvp, fall, onboarding), block break, use block/item/entity, attack entity, chat |
@@ -57,16 +60,18 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `mixin/GameProfileArgumentMixin.java` | Plain names in profile arguments (`/playtime`, `/nick`, `/builder`, `/op`): nickname (also offline) → owner, before the name cache (offline mode invents a profile for every unknown name) |
 | `mixin/CommandNodeInspectorMixin.java`, `mixin/CommandSourceStackMixin.java` | Command tree marks entity/profile arguments without own suggestions as `ask_server`; server-side `getOnlinePlayerNames` adds typable nicknames of online players |
 | `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors and keeps a locked lower half when its support goes (`updateShape` DOWN); linking needs `Protection.mayBuild`; break guard also covers the block under a locked door; `PistonStructureResolverMixin` (resolve fails if a locked door is in toPush/toDestroy – doors are POPPED, so `isPushable` alone doesn't help), `LockedDoorExplosionMixin` (own `@ModifyVariable` on `interactWithBlocks`, chains with `ServerExplosionMixin`), `BreakDoorGoalMixin` (zombies), `BlockBehaviourMixin` (`onPlace` of a new door drops a stale lock, `affectNeighborsAfterRemoval` deletes the lock); `/key new|copy` 10 s cooldown per UUID (ops exempt); `CraftingMenuMixin` + `CrafterBlockMixin`: keys are no crafting ingredient |
-| `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look, or position change while a movement key is held in `ServerPlayer.getLastClientInput()` – pushing by water/pistons/mobs/players/knockback has no input and doesn't count; chat via `CHAT_MESSAGE`, every command via `CommandActivityMixin` at `Commands.performCommand` HEAD except `/afk` itself), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`), `/playtime [player|top]`, `/afk` |
+| `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look, or position change while a movement key is held in `ServerPlayer.getLastClientInput()` – pushing by water/pistons/mobs/players/knockback has no input and doesn't count; chat via `CHAT_MESSAGE`, every command via `CommandActivityMixin` at `Commands.performCommand` HEAD except `/afk` itself), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`; marked dirty only when a value or name changed), `/playtime [player|top]` (`top(n)` keeps only the best n while walking the map, same order as the old stable sort; n ≥ size sorts all), `/afk`. Encoding 10k play time entries costs ≈ 1.2 ms per autosave, so the DFU codec stays |
 | `display/JoinMessages.java`, `display/TabList.java`, `command/ChatDisplayCommands.java` | Vanilla join/leave suppressed via `ALLOW_GAME_MESSAGE` (translation keys), own templates with `{player}`; first join = `Stats.LEAVE_GAME == 0`; tab header/footer every 2 s with placeholders; `enabled: false` sends one empty header/footer when switching off, then nothing (other mods' tab lists survive); `/joinmessage set <player> -` stores "" = no join message |
 | `command/RulesCommand.java` | `/rules`, `/regeln`, `accept`/`akzeptieren`, op `reset <player>` |
-| `util/Text.java` | `&` color codes → legacy §, title packets |
+| `util/Text.java` | `&` color codes → legacy § (char loop, same result as the old regex), title packets |
 | `mixin/BlockItemMixin.java`, `mixin/PlayerMixin.java` | Placement and hunger hooks (no Fabric event for them) |
 | `mixin/CommandsMixin.java` | `Commands.performCommand` HEAD: confined non-op players may only run `confinement.allowedCommands` (op = `TownhallCommand.isOperatorSelf`) |
 | `mixin/CommandSourceStackAccessor.java` | Reads the private `CommandSourceStack.source` (player, console, sign = `CommandSource.NULL`, command block) for `isOperatorSelf` |
 | `mixin/LevelMixin.java` | Adds `Level.getDifficulty()` override (vanilla only has the `LevelAccessor` default) |
 | `src/gametest/.../TownhallGameTests.java` | 65 GameTests |
 | `src/gametest/.../WorldRulesGameTests.java` | 9 GameTests for 1.14.0 (sleep percentage, sleeping in fixed worlds, weather leak, all mob spawn paths, explosion fire/triggers, AFK pushing/commands, `time_check`, join message `-`, tab list off) |
+| `src/gametest/.../PerformanceGameTests.java` | 5 GameTests for 1.14.1: the faster paths give the old results (safe-spot search vs. the old implementation, `/playtime top` ties, active index, `Text.of`, empty time packet, key scan, WorldEdit nodes) |
+| `src/gametest/.../PerfBench.java` | Micro benchmark of the hot paths (60 mock players), only with `-Dtownhall.bench=true` |
 | `src/gametest/.../PacketLog.java` + `mixin/PacketLogMixin` | Records packets sent to watched players (`PacketLog.watch(uuid)`), for packet-level assertions |
 
 ## Core rules
@@ -87,8 +92,8 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 4. After success: clear state (or keep only the position if `clearAfterSuccessfulReturn` is false).
 
 **Confinement and timers** (`ConfinementService`)
-- `END_SERVER_TICK`, every 20 ticks, iterates `storage.activePlayers()` (confined or timed) only.
-- Offline players are skipped, so their clock stops. Elapsed real time per pass is capped at 5 s (lag spikes).
+- `END_SERVER_TICK`, every 20 ticks, iterates `storage.activePlayers()` (confined or timed) only. `ActivityService` (AFK, play time, tab list) runs 10 ticks later, so the two per-second passes never share a tick.
+- Offline players are skipped, so their clock stops. Elapsed real time per pass comes from `System.nanoTime` (a changed system clock doesn't count) and is clamped to 0–5 s (lag spikes).
 - Timer ≤ 0 → `release`: `returnPlayer(op)`, fallback if there is no position; message; state cleared.
 - Confined and outside the location (other dimension, or farther than `confineRadius` from spawn) → teleport back to spawn.
 - `AFTER_RESPAWN` puts dead confined players back right away.
@@ -123,6 +128,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 
 **Safe spot** (`SafeLocationFinder.isSafe`): inside world bounds and world border, no collision for the standing hitbox, no `BlockTags.DANGEROUS_FOR_TELEPORTATION` or lava in/below the body, and ground within 1 block below (or water at the feet).
 The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `level.getChunk` (normal chunk system, no forced chunks).
+`isSafe` is a conjunction of side-effect-free checks; the ground check runs before the body check (fails first in open air). Worst case (16/16, open air, nothing safe) ≈ 3 ms; keep `PerformanceGameTests.safeSpotSearchMatchesOldSearch` green after changing the search.
 
 **Commands**
 - Per location root: `/<cmd>`, `return`, `return <player>` (op), `send <player> [minutes]` (op), `setspawn` (op), `reload`, `status`, `debug <player>`, `clearreturn <player>`, `difficulty <dimension> [peaceful|easy|normal|hard|default]` (all op).

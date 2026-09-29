@@ -112,7 +112,8 @@ public final class DimensionSettings {
 	/** The time packet a player in this world should get: every clock stopped at the fixed time, or the packet unchanged. */
 	public static ClientboundSetTimePacket timePacketFor(ResourceKey<Level> dimension, ClientboundSetTimePacket packet) {
 		Long fixed = fixedTime(dimension);
-		if (fixed == null) return packet;
+		// Vanilla's regular time packet (every 20 ticks) has no clock updates: nothing to pin, send it as it is.
+		if (fixed == null || packet.clockUpdates().isEmpty()) return packet;
 		Map<Holder<WorldClock>, ClockNetworkState> clocks = new HashMap<>();
 		packet.clockUpdates().forEach((clock, state) -> clocks.put(clock, new ClockNetworkState(pin(state.totalTicks(), fixed), 0f, 0f)));
 		return new ClientboundSetTimePacket(packet.gameTime(), clocks);
