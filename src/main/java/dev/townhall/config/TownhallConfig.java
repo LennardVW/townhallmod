@@ -8,6 +8,7 @@ import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IllegalFormatException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -304,8 +305,14 @@ public final class TownhallConfig {
 				checkDimension(errors, field + ".dimension", loc.dimension);
 				if (loc.spawn == null) errors.add(field + ".spawn is missing");
 				else checkSpot(errors, field + ".spawn", loc.spawn);
+				if (loc.dimension != null && isSharedWorld(loc.dimension)) {
+					// Only a warning: an existing live config must keep loading. The /location commands refuse it.
+					dev.townhall.TownhallMod.LOGGER.warn("{}.dimension '{}' is the overworld/fallback world; a location needs a world of its own"
+							+ " (otherwise enter and return break for everyone in that world)", field, loc.dimension);
+				}
 				if (loc.arrivedMessage == null) loc.arrivedMessage = "";
 				if (loc.alreadyHereMessage == null) loc.alreadyHereMessage = "";
+				checkFormat(errors, field + ".alreadyHereMessage", loc.alreadyHereMessage, "townhall");
 				if (loc.confineRadius < 0) errors.add(field + ".confineRadius must be >= 0");
 			}
 		}
@@ -351,13 +358,70 @@ public final class TownhallConfig {
 			}
 		});
 		if (onboarding == null) errors.add("onboarding is missing");
-		else if (onboarding.welcome == null || onboarding.tutorial == null || onboarding.rules == null) errors.add("onboarding.welcome/tutorial/rules must be lists");
+		else {
+			if (hasNullText(onboarding.welcome) || hasNullText(onboarding.tutorial) || hasNullText(onboarding.rules)) {
+				errors.add("onboarding.welcome/tutorial/rules must be lists of texts");
+			}
+			checkText(errors, "onboarding.acceptButton", onboarding.acceptButton);
+			checkText(errors, "onboarding.acceptHint", onboarding.acceptHint);
+			checkText(errors, "onboarding.accepted", onboarding.accepted);
+			checkText(errors, "onboarding.acceptedTitle", onboarding.acceptedTitle);
+			checkText(errors, "onboarding.reminder", onboarding.reminder);
+		}
 		if (confinement == null || confinement.allowedCommands == null) errors.add("confinement.allowedCommands is missing");
 		if (messages == null) errors.add("messages is missing");
+		else {
+			// Plain texts, and texts filled in with String.formatted(...): the sample arguments have the types the code passes.
+			checkText(errors, "messages.returned", messages.returned);
+			checkText(errors, "messages.returnedNearby", messages.returnedNearby);
+			checkText(errors, "messages.returnedFallback", messages.returnedFallback);
+			checkText(errors, "messages.noReturnPosition", messages.noReturnPosition);
+			checkText(errors, "messages.released", messages.released);
+			checkFormat(errors, "messages.locationUnavailable", messages.locationUnavailable, "minecraft:flatworld");
+			checkFormat(errors, "messages.confined", messages.confined, "the prison");
+			checkFormat(errors, "messages.confinedTimed", messages.confinedTimed, "the prison", "1:15");
+			checkFormat(errors, "messages.commandBlocked", messages.commandBlocked, "home");
+			checkFormat(errors, "messages.pulledBack", messages.pulledBack, "the prison");
+			checkFormat(errors, "messages.timeLeft", messages.timeLeft, "The prison", "1:15");
+			checkFormat(errors, "messages.cooldown", messages.cooldown, 3L);
+		}
 		if (joinMessages == null || joinMessages.players == null) errors.add("joinMessages is missing");
 		if (tabList == null || tabList.header == null || tabList.footer == null) errors.add("tabList.header/footer must be lists");
 		if (afkMinutes < 0) errors.add("afkMinutes must be >= 0");
 		return errors;
+	}
+
+	/** True for the overworld and the fallback world: a location there would break enter/return for everyone in it. */
+	public boolean isSharedWorld(String dimension) {
+		return dimension.equals("minecraft:overworld") || (fallback != null && dimension.equals(fallback.dimension));
+	}
+
+	/** Null if the text can be filled in with {@code text.formatted(sampleArgs)}, otherwise what is wrong (e.g. a single %). */
+	public static String formatProblem(String text, Object... sampleArgs) {
+		try {
+			String.format(Locale.ROOT, text, sampleArgs);
+			return null;
+		} catch (IllegalFormatException e) {
+			return "invalid % placeholder (" + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()) + "); write %% for a percent sign";
+		}
+	}
+
+	/** Missing list or a missing line in it (List.of(...).contains(null) would throw, so no contains). */
+	private static boolean hasNullText(List<String> lines) {
+		return lines == null || lines.stream().anyMatch(java.util.Objects::isNull);
+	}
+
+	private static void checkText(List<String> errors, String field, String value) {
+		if (value == null) errors.add(field + " is missing");
+	}
+
+	private static void checkFormat(List<String> errors, String field, String value, Object... sampleArgs) {
+		if (value == null) {
+			errors.add(field + " is missing");
+			return;
+		}
+		String problem = formatProblem(value, sampleArgs);
+		if (problem != null) errors.add(field + ": " + problem);
 	}
 
 	private static void checkDimension(List<String> errors, String field, String value) {

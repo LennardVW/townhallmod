@@ -87,7 +87,7 @@ Getestet zusammen mit mc-worlds, WorldEdit 7.4.6, C2ME, Lithium, spark und Chest
 
 Danach funktioniert `/townhall` für alle Spieler.
 
-> Lege keinen Ort in die normale Oberwelt. Wer in der Welt eines Ortes steht, gilt als „drin“, und dann wird keine Rückkehrstelle gespeichert.
+> Ein Ort braucht eine eigene Welt. In der Oberwelt und in der Notfall-Welt (`fallback`) lehnt die Mod Orte ab: Wer in der Welt eines Ortes steht, gilt als „drin“, und dann würde für niemanden dort eine Rückkehrstelle gespeichert.
 
 ---
 
@@ -130,6 +130,11 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 4. `/key copy Max` gibt Max eine Kopie. Die Kopie öffnet dieselben Türen.
 
 Es reicht, wenn der Schlüssel irgendwo im Inventar liegt. Du musst ihn nicht in der Hand halten. Ohne passenden Schlüssel lässt sich die Tür weder öffnen noch abbauen, und auch Knöpfe, Hebel, Redstone und Dorfbewohner öffnen sie nicht. Das funktioniert mit Holz-, Kupfer- und Eisentüren.
+
+- Abschließen kannst du nur Türen, an denen du bauen darfst. In einer Welt mit `build false` bleiben öffentliche Türen also offen (außer für Bauer und Admins).
+- Eine abgeschlossene Tür bleibt stehen, auch wenn der Block darunter verschwindet. Den Block darunter abbauen darf nur, wer den Schlüssel hat. Kolben, Explosionen und Zombies zerstören abgeschlossene Türen nicht.
+- Verschwindet eine abgeschlossene Tür trotzdem (zum Beispiel per Befehl), ist das Schloss weg. Eine neue Tür an derselben Stelle ist nicht abgeschlossen.
+- `/key new` und `/key copy` gehen je einmal alle 10 Sekunden (Admins ohne Wartezeit). Schlüssel lassen sich nicht zu Fallenkisten oder Armbrüsten verarbeiten.
 
 ### Im Gefängnis
 
@@ -175,6 +180,10 @@ Hat Max keine gespeicherte Stelle (etwa weil er schon vorher in der Gefängniswe
 
 Admins werden nie eingesperrt, auch dann nicht, wenn sie sich selbst ins Gefängnis schicken. Sie behalten alle Befehle und kommen mit `/gefaengnis return` oder `/tp` wieder heraus.
 
+Befehle auf Schildern (Klick-Befehle) laufen mit den Rechten des Spielers, der klickt. Ein Schild mit `/townhall return` holt also keinen Gefangenen heraus und öffnet keinen Ort, der nur für Admins ist.
+
+Schickt ein Admin einen Spieler an einen Ort mit `adminOnly`, sieht dieser Spieler dort trotzdem `/<ort> return`, solange er dort ist.
+
 ### Orte per Befehl verwalten
 
 Mit `/location` legst du Orte an und änderst sie, ohne die Config-Datei zu öffnen. Jede Änderung wird sofort gespeichert. Neue oder umbenannte Befehle stehen allen Spielern sofort zur Verfügung.
@@ -186,15 +195,15 @@ Mit `/location` legst du Orte an und änderst sie, ohne die Config-Datei zu öff
 | `/location create bunker` | Neuer Ort mit dem Befehl `/bunker` an deiner Position |
 | `/location create bunker prison` | Neuer Ort als Gefängnis: nur für Admins, kein Ausbruch |
 | `/location setspawn bunker` | Ankunftspunkt und Welt auf deine aktuelle Position setzen |
-| `/location set bunker escapable false` | `false` macht den Ort zum Gefängnis, `true` erlaubt freies Gehen |
+| `/location set bunker escapable false` | `false` macht den Ort zum Gefängnis, `true` erlaubt freies Gehen und lässt alle frei, die dort gerade eingesperrt sind (eine Restzeit läuft weiter) |
 | `/location set bunker adminOnly true` | Nur Admins sehen und benutzen den Befehl |
 | `/location set bunker radius 32` | So viele Blöcke dürfen sich Gefangene vom Ankunftspunkt entfernen |
 | `/location set bunker command knast` | Befehl umbenennen: aus `/bunker` wird `/knast` |
-| `/location set bunker dimension multiworld:flatworld` | Welt des Ortes ändern |
+| `/location set bunker dimension multiworld:flatworld` | Welt des Ortes ändern (nicht die Oberwelt oder die Notfall-Welt) |
 | `/location set bunker name the bunker` | Name, der in Nachrichten erscheint |
 | `/location set bunker message Du bist im Bunker.` | Nachricht bei Ankunft |
 | `/location set bunker title &cBunker` | Großer Titel bei Ankunft (`subtitle` funktioniert genauso, `-` entfernt ihn) |
-| `/location set bunker alreadyHereMessage ...` | Nachricht, wenn man schon dort ist |
+| `/location set bunker alreadyHereMessage ...` | Nachricht, wenn man schon dort ist. `%s` wird durch den Befehl ersetzt, ein Prozentzeichen schreibst du als `%%`. |
 | `/location delete bunker` | Ort löschen. Das geht nicht, solange dort noch jemand festsitzt. |
 
 Befehlsnamen dürfen Umlaute und `:` enthalten. Dann gehören sie in Anführungszeichen, zum Beispiel `"townhall:gefängnis"`. Namen, die schon Minecraft oder eine andere Mod benutzt, lehnt die Mod ab.
@@ -213,7 +222,7 @@ Jede Welt, auch die Welten anderer Mods, kann eigene Regeln bekommen. Den Weltna
 | Regel | Wirkung bei `false` |
 |---|---|
 | `pvp` | Spieler können sich nicht gegenseitig schaden. |
-| `build` | Nur Admins und eingetragene Bauer dürfen Blöcke setzen oder abbauen, Eimer, Feuerzeug, Rahmen und Rüstungsständer benutzen. Türen, Knöpfe und Kisten bleiben benutzbar. |
+| `build` | Nur Admins und eingetragene Bauer dürfen Blöcke setzen oder abbauen, Eimer, Feuerzeug, Rahmen und Rüstungsständer benutzen, Schilder beschreiben oder färben, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke und Tageslichtsensoren verstellen, Farbstoff, Tintenbeutel, Honigwaben, Scheren, Pinsel, Enderaugen und Wasserflaschen auf Blöcke anwenden. Pfeile, Dreizacke und Schneebälle von anderen Spielern zerstören keine Rahmen, Bilder, Rüstungsständer, Boote, Loren oder Krüge und zünden kein TNT. Benutzbar bleiben Türen, Falltüren, Zauntore, Knöpfe, Hebel, Betten, Kisten und alle Blöcke mit Menü (Werkbank, Ofen, Amboss, Zaubertisch und so weiter), auch mit Werkzeug oder Eimer in der Hand. Wer schleicht, benutzt das Item statt des Blocks. |
 | `hunger` | Kein Hunger. Beim Betreten der Welt wird die Hungerleiste aufgefüllt. |
 | `fallDamage` | Kein Fallschaden. |
 | `mobs` | Mobs spawnen nicht von selbst, auch nicht aus Spawnern, als Patrouille oder als Phantom. Spawn-Eier und Befehle funktionieren weiter. |
@@ -251,7 +260,7 @@ Gilt in einer Welt `build false`, dürfen dort normalerweise nur Admins bauen. M
 | `/builder creative` | Bauer | In der eigenen Bauwelt in den Creative-Modus wechseln |
 | `/builder survival` | Bauer | Zurück in Survival |
 
-In seiner Welt darf ein Bauer bauen und abbauen wie ein Admin und WorldEdit benutzen (`//wand`, `//set`, `//copy` und so weiter). Gesperrt bleiben WorldEdit-Befehle für Admins: `/we reload`, `//world`, `/butcher`, `/remove…`, Snapshots, unbegrenzte Limits und ähnliche.
+In seiner Welt darf ein Bauer bauen und abbauen wie ein Admin und WorldEdit benutzen (`//wand`, `//set`, `//copy` und so weiter). Gesperrt bleiben WorldEdit-Befehle für Admins: `/we reload`, `//world`, `/butcher`, `/remove…`, Snapshots, unbegrenzte Limits, CraftScripts (`/cs`), Schematics löschen, `setnbt` und ähnliche. Schematics speichern und laden dürfen Bauer.
 
 Verlässt der Bauer seine Welt durch Teleport oder Tod oder loggt er sich woanders ein, ist er automatisch wieder im Survival-Modus und hat dort kein WorldEdit.
 
@@ -328,7 +337,7 @@ Die Tab-Liste kann neben dem Namen nur eine Zahl zeigen. Nutzt du dort schon ein
 
 ### Begrüßung und Regeln beim ersten Join
 
-Texte, Regeln und Verhalten stehen in der Config unter `onboarding`. Ändern sich die Regeln, erhöhst du `onboarding.rulesVersion`. Dann müssen alle Spieler sie beim nächsten Join neu akzeptieren.
+Texte, Regeln und Verhalten stehen in der Config unter `onboarding`. Ändern sich die Regeln, erhöhst du `onboarding.rulesVersion`. Dann müssen alle Spieler sie beim nächsten Join neu akzeptieren. Schaltest du `onboarding.enabled` aus oder senkst die Version (danach `/townhall reload`), sind wartende Spieler sofort frei.
 
 | Befehl | Was er macht |
 |---|---|
@@ -340,15 +349,19 @@ Admins sehen die Texte ebenfalls, werden aber nicht eingeschränkt.
 
 Alles lässt sich per Befehl einstellen. Wer lieber direkt in `config/townhall.json` arbeitet, lädt die Datei danach mit `/townhall reload` neu. Ist die Datei fehlerhaft, nennt die Meldung den Fehler, und die alte Einstellung bleibt aktiv.
 
+Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/townhall reload`), speichern Befehle nichts. Sie melden dann „Config not saved“, damit deine Datei nicht überschrieben wird. Die Änderung gilt bis zum nächsten Reload oder Neustart. Datei reparieren, `/townhall reload`, dann wird wieder gespeichert.
+
+`/townhall reload` lehnt außerdem eine Datei ab, in der ein Ort fehlt, an dem noch jemand eingesperrt ist oder eine Restzeit hat, und eine Datei, deren Befehlsname schon zu Minecraft oder einer anderen Mod gehört.
+
 **Einstellungen pro Ort** (unter `locations`)
 
 | Einstellung | Bedeutung |
 |---|---|
 | `command` | Befehlsname ohne `/` |
 | `displayName` | Name in Nachrichten |
-| `dimension` | Welt des Ortes. Mehrere Orte dürfen in derselben Welt liegen. |
+| `dimension` | Welt des Ortes. Mehrere Orte dürfen in derselben Welt liegen, aber nicht in der Oberwelt oder der Notfall-Welt. |
 | `spawn` | Ankunftspunkt mit `x`, `y`, `z`, `yaw` (Blickrichtung) und `pitch` (Blick nach oben oder unten) |
-| `adminOnly` | `true`: nur Admins können den Befehl benutzen |
+| `adminOnly` | `true`: nur Admins können den Befehl benutzen. Wer von einem Admin dorthin geschickt wurde, sieht dort `return`. |
 | `escapable` | `false`: Gefängnis, nur ein Admin oder das Ende der Zeit lässt einen heraus |
 | `confineRadius` | Bewegungsradius für Gefangene in Blöcken. `0` prüft nur die Welt. |
 | `arrivedMessage`, `alreadyHereMessage` | Nachrichten bei Ankunft und wenn man schon dort ist |
@@ -377,7 +390,7 @@ Alles lässt sich per Befehl einstellen. Wer lieber direkt in `config/townhall.j
 | `onboarding.rulesVersion` | `1` | Erhöhen, wenn sich die Regeln ändern |
 | `onboarding.restrictUntilAccepted` | `true` | Bis zum Akzeptieren kein Bewegen, Chatten, Bauen und keine Befehle |
 | `onboarding.reminderSeconds` | `30` | Abstand, in dem der Knopf erneut erscheint |
-| `messages.*` | Englisch | Alle Chat-Texte der Teleport-Befehle |
+| `messages.*` | Englisch | Alle Chat-Texte der Teleport-Befehle. `%s` und `%d` sind Platzhalter, ein Prozentzeichen schreibst du als `%%`. |
 | `debugLogging` | `false` | Jeden Teleport ins Log schreiben |
 
 Beispiel für Weltregeln in der Datei:
@@ -431,6 +444,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 | Schwierigkeit im Menü stimmt nach `/difficulty` nicht | Die Weltschwierigkeit gilt trotzdem. Einmal die Welt wechseln oder `/townhall reload`, dann stimmt die Anzeige wieder. |
 | Bauer kann kein WorldEdit benutzen | Er muss in der Welt stehen, für die er eingetragen ist. `/builder list` prüfen. |
 | „Config not reloaded“ | Die Meldung nennt den Fehler in der Datei. Die alte Config bleibt aktiv. |
+| „Config not saved“ | `config/townhall.json` ist fehlerhaft (oder nicht beschreibbar). Datei reparieren und `/townhall reload`; bis dahin speichern Befehle nichts. |
 
 ---
 
@@ -458,7 +472,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 ## Bekannte Grenzen
 
 - **Gemeinsames Inventar:** Bauer können Creative-Items in andere Welten mitnehmen. Getrennte Inventare pro Welt gibt es noch nicht.
-- **Abgeschlossene Türen:** Zombies auf „schwer“ und Explosionen können sie zerstören. Die Weltregel `explosions false` verhindert Letzteres.
+- **Abgeschlossene Türen:** Wer an einer Stelle bauen darf, kann dort auch Türen anderer Spieler abschließen, solange sie noch offen sind. Grundstücke gibt es nicht.
 - **Nicknamen:** Bei Spielern mit Nicknamen fehlen über dem Kopf Farbe, Präfix und Einstellungen von Scoreboard-Teams (`/team`); die Teams selbst funktionieren. Nicknamen mit Leerzeichen oder Zeichen wie `!` schlägt die Tab-Taste nicht vor. Nicknamen mit Leerzeichen gehen nur bei Befehlen für Online-Spieler (in Anführungszeichen).
 - **Schwierigkeit pro Welt:** Einige wenige Stellen im Spiel lesen weiterhin die Server-Schwierigkeit, etwa Endermiten aus Enderperlen oder Piglins aus Netherportalen.
 - **Wetter:** Welten ohne Wetter (Nether, End) können kein festes Wetter bekommen.

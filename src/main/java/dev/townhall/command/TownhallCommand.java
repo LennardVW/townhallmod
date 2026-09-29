@@ -5,9 +5,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.tree.CommandNode;
 import dev.townhall.TownhallMod;
+import dev.townhall.config.ConfigManager;
 import dev.townhall.config.TownhallConfig;
 import dev.townhall.dimension.DimensionSettings;
+import dev.townhall.mixin.CommandSourceStackAccessor;
 import dev.townhall.storage.PlayerState;
 import dev.townhall.storage.ReturnLocation;
 import dev.townhall.storage.ReturnPositionStorage;
@@ -27,6 +30,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -51,33 +55,68 @@ import java.util.function.Predicate;
 public final class TownhallCommand {
 
 	private static final Map<UUID, Long> LAST_USE = new HashMap<>();
-	/** Root command names this mod registered (nodes stay in Brigadier until restart, even when unused). */
-	private static final java.util.Set<String> REGISTERED = new java.util.HashSet<>();
 
 	private TownhallCommand() {}
 
-	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-		for (TownhallConfig.Location location : TownhallMod.CONFIG.get().locations.values()) {
-			dispatcher.register(build(location.command));
-			REGISTERED.add(location.command);
+	/**
+	 * Root requirement of every location command. Its class also marks the root nodes this mod built (nodes stay in Brigadier
+	 * until restart, even when unused), so a name is only reused when the node there is ours.
+	 * Visible for operators, for everyone at normal locations, and at adminOnly locations for players an operator sent there
+	 * (so they can use return).
+	 */
+	private record MayUse(String command) implements Predicate<CommandSourceStack> {
+		@Override
+		public boolean test(CommandSourceStack src) {
+			return idFor(command).map(id -> isOperator(src) || !location(id).adminOnly || staysAt(src, id)).orElse(false);
 		}
+	}
+
+	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+		for (TownhallConfig.Location location : TownhallMod.CONFIG.get().locations.values()) addRoot(dispatcher, location.command);
 	}
 
 	/** Adds root commands for locations that don't have one yet and sends everyone the new command list. */
 	public static void refreshCommands(MinecraftServer server) {
 		CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
-		for (TownhallConfig.Location location : TownhallMod.CONFIG.get().locations.values()) {
-			if (dispatcher.getRoot().getChild(location.command) == null) {
-				dispatcher.register(build(location.command));
-				REGISTERED.add(location.command);
-			}
-		}
+		for (TownhallConfig.Location location : TownhallMod.CONFIG.get().locations.values()) addRoot(dispatcher, location.command);
 		server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
+	}
+
+	/** Registers the root unless the name exists; a name owned by Minecraft or another mod is skipped (Brigadier would merge into it). */
+	private static void addRoot(CommandDispatcher<CommandSourceStack> dispatcher, String command) {
+		CommandNode<CommandSourceStack> existing = dispatcher.getRoot().getChild(command);
+		if (existing == null) {
+			dispatcher.register(build(command));
+		} else if (!isOurs(existing)) {
+			TownhallMod.LOGGER.error("/{} is already a command of Minecraft or another mod; the location using it gets no command. Pick another name.", command);
+		}
+	}
+
+	private static boolean isOurs(CommandNode<CommandSourceStack> node) {
+		return node.getRequirement() instanceof MayUse;
 	}
 
 	/** True if the name is already a command of Minecraft or another mod (ours may be reused). */
 	public static boolean isForeignCommand(MinecraftServer server, String name) {
-		return server.getCommands().getDispatcher().getRoot().getChild(name) != null && !REGISTERED.contains(name);
+		CommandNode<CommandSourceStack> node = server.getCommands().getDispatcher().getRoot().getChild(name);
+		return node != null && !isOurs(node);
+	}
+
+	/** Problems of a new config that only the running server can see; /townhall reload rejects the file for them. */
+	public static List<String> reloadProblems(MinecraftServer server, TownhallConfig next) {
+		List<String> errors = new ArrayList<>();
+		TownhallConfig current = TownhallMod.CONFIG.get();
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		Map<String, Long> held = new java.util.TreeMap<>();
+		for (UUID id : storage.activePlayers()) {
+			storage.state(id).location().filter(loc -> !next.locations.containsKey(loc)).ifPresent(loc -> held.merge(loc, 1L, Long::sum));
+		}
+		held.forEach((loc, count) -> errors.add("locations." + loc + " is missing, but " + count + " player(s) are still held there. Release them first with /"
+				+ current.location(loc).map(l -> l.command).orElse(loc) + " return <player>, or keep the location."));
+		next.locations.forEach((id, loc) -> {
+			if (isForeignCommand(server, loc.command)) errors.add("locations." + id + ".command: /" + loc.command + " is already a command of Minecraft or another mod");
+		});
+		return errors;
 	}
 
 	/** The location that currently uses this command name. */
@@ -98,7 +137,6 @@ public final class TownhallCommand {
 
 	public static LiteralArgumentBuilder<CommandSourceStack> build(String command) {
 		Predicate<CommandSourceStack> op = TownhallCommand::isOperator;
-		Predicate<CommandSourceStack> mayUse = src -> idFor(command).map(id -> isOperator(src) || !location(id).adminOnly).orElse(false);
 		return Commands.literal(command)
 				.executes(ctx -> at(ctx, command, id -> enterSelf(ctx, id)))
 				.then(Commands.literal("return")
@@ -122,7 +160,7 @@ public final class TownhallCommand {
 						.then(Commands.argument("player", GameProfileArgument.gameProfile()).executes(TownhallCommand::debug)))
 				.then(Commands.literal("clearreturn").requires(op)
 						.then(Commands.argument("player", GameProfileArgument.gameProfile()).executes(TownhallCommand::clearReturn)))
-				.requires(mayUse);
+				.requires(new MayUse(command));
 	}
 
 	// ------------------------------------------------------------ player commands
@@ -131,7 +169,7 @@ public final class TownhallCommand {
 		ServerPlayer player = requirePlayer(ctx.getSource());
 		if (player == null) return 0;
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		boolean operator = isOperator(ctx.getSource());
+		boolean operator = isOperatorSelf(ctx.getSource());
 		if (config.location(id).orElseThrow().adminOnly && !operator) return fail(ctx.getSource(), "Only operators can go there.");
 		if (onCooldown(ctx.getSource(), player)) return 0;
 		TownhallConfig.Location location = location(id);
@@ -148,7 +186,7 @@ public final class TownhallCommand {
 		ServerPlayer player = requirePlayer(ctx.getSource());
 		if (player == null || onCooldown(ctx.getSource(), player)) return 0;
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		TeleportService.ReturnResult result = TeleportService.returnPlayer(player, config, isOperator(ctx.getSource()));
+		TeleportService.ReturnResult result = TeleportService.returnPlayer(player, config, isOperatorSelf(ctx.getSource()));
 		if (result == TeleportService.ReturnResult.CONFINED) return fail(ctx.getSource(), confinedMessage(config, player));
 		if (result == TeleportService.ReturnResult.NO_POSITION && isStuck(player, config)) {
 			// Someone who reached a location another way must not get stuck there.
@@ -206,8 +244,8 @@ public final class TownhallCommand {
 			return fail(ctx.getSource(), "Stand in " + location.dimension + " to set the spawn of " + config.displayName(id) + ".");
 		}
 		location.spawn = new TownhallConfig.Spot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-		TownhallMod.CONFIG.save();
 		TownhallMod.LOGGER.info("{} set the spawn of {} to {}", player.getPlainTextName(), id, formatSpot(location.spawn));
+		if (!saveConfig(ctx.getSource())) return 0;
 		return ok(ctx.getSource(), "Spawn of " + config.displayName(id) + " set to " + formatSpot(location.spawn) + ".");
 	}
 
@@ -251,8 +289,8 @@ public final class TownhallCommand {
 
 	private static int setDeathsInTab(CommandContext<CommandSourceStack> ctx, boolean on) {
 		TownhallMod.CONFIG.get().deathsInTab = on;
-		TownhallMod.CONFIG.save();
 		dev.townhall.display.DeathsInTab.apply(ctx.getSource().getServer());
+		if (!saveConfig(ctx.getSource())) return 0;
 		return ok(ctx.getSource(), on ? "Deaths are shown in the tab list." : "Deaths are no longer shown in the tab list.");
 	}
 
@@ -296,10 +334,10 @@ public final class TownhallCommand {
 			case "weather" -> rules.weather = reset ? null : value;
 			default -> throw new IllegalArgumentException(rule);
 		}
-		TownhallMod.CONFIG.save();
 		DimensionSettings.rebuild(config);
 		if (rule.equals("time")) DimensionSettings.syncAll(ctx.getSource().getServer());
 		TownhallMod.LOGGER.info("World rule {} of {} set to {}", rule, id, value);
+		if (!saveConfig(ctx.getSource())) return 0;
 		String now = !reset ? value
 				: rule.equals("time") || rule.equals("weather") ? "default (normal)" : "default (on)";
 		return ok(ctx.getSource(), rule + " in " + id + " is now " + now + ".");
@@ -323,22 +361,27 @@ public final class TownhallCommand {
 		} else {
 			config.dimensions.computeIfAbsent(id, k -> new TownhallConfig.DimensionRules()).difficulty = value;
 		}
-		TownhallMod.CONFIG.save();
 		DimensionSettings.rebuild(config);
 		DimensionSettings.syncAll(ctx.getSource().getServer());
 		TownhallMod.LOGGER.info("Difficulty of {} set to {}", id, value);
+		if (!saveConfig(ctx.getSource())) return 0;
 		return ok(ctx.getSource(), "Difficulty of " + id + " is now " + level.getDifficulty().getSerializedName()
 				+ (value.equals("default") ? " (server default)" : "") + ".");
 	}
 
 	private static int reload(CommandContext<CommandSourceStack> ctx) {
-		List<String> errors = TownhallMod.CONFIG.reload();
+		var server = ctx.getSource().getServer();
+		List<String> errors = TownhallMod.CONFIG.reload(next -> reloadProblems(server, next));
 		if (!errors.isEmpty()) {
-			ctx.getSource().sendFailure(Component.literal("Config not reloaded, the previous config stays active:\n - " + String.join("\n - ", errors)));
+			ctx.getSource().sendFailure(Component.literal("Config not reloaded, the previous config stays active (config changes by command are not saved until a reload works):\n - "
+					+ String.join("\n - ", errors)));
 			return 0;
 		}
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		var server = ctx.getSource().getServer();
+		// Locations that became escapable in the file free their prisoners, like /location set <id> escapable true.
+		config.locations.forEach((id, loc) -> {
+			if (loc.isEscapable()) ReturnPositionStorage.get(server).releaseConfinedAt(id);
+		});
 		DimensionSettings.rebuild(config);
 		DimensionSettings.syncAll(server);
 		List<String> missing = config.locations.values().stream()
@@ -347,6 +390,8 @@ public final class TownhallCommand {
 		if (!missing.isEmpty()) msg.append(" Not loaded: ").append(String.join(", ", missing)).append(". Loaded: ").append(TownhallMod.loadedDimensions(server)).append('.');
 		refreshCommands(server);
 		dev.townhall.display.DeathsInTab.apply(server);
+		// Builders removed in the file lose creative and WorldEdit right away, not only on their next world change.
+		server.getPlayerList().getPlayers().forEach(dev.townhall.protection.Protection::enforceBuilderMode);
 		ctx.getSource().sendSuccess(() -> Component.literal(msg.toString()).withStyle(missing.isEmpty() ? ChatFormatting.GREEN : ChatFormatting.YELLOW), true);
 		return 1;
 	}
@@ -364,7 +409,8 @@ public final class TownhallCommand {
 		text.append(line("World rules", config.dimensions.isEmpty() ? "none" : String.join(", ", config.dimensions.keySet())))
 				.append(line("Stored return positions", String.valueOf(storage.returnPositionCount())))
 				.append(line("Confined / timed players", activeList(server, storage)))
-				.append(line("Config", TownhallMod.CONFIG.loadedFromFile() ? "loaded from " + TownhallMod.CONFIG.path().getFileName() : "built-in defaults (file invalid)"))
+				.append(line("Config", (TownhallMod.CONFIG.loadedFromFile() ? "loaded from " + TownhallMod.CONFIG.path().getFileName() : "built-in defaults (file invalid)")
+						+ (TownhallMod.CONFIG.canSave() ? "" : ", file has errors: changes are NOT saved until /townhall reload works")))
 				.append(line("Persistent storage", "loaded"))
 				.append(line("Loaded dimensions", TownhallMod.loadedDimensions(server)));
 		ctx.getSource().sendSuccess(() -> text, false);
@@ -401,6 +447,8 @@ public final class TownhallCommand {
 		for (NameAndId profile : GameProfileArgument.getGameProfiles(ctx, "player")) {
 			if (storage.remove(profile.id())) {
 				cleared++;
+				ServerPlayer online = ctx.getSource().getServer().getPlayerList().getPlayer(profile.id());
+				if (online != null) TeleportService.resendCommands(online);
 				ok(ctx.getSource(), "Cleared the stored position and confinement of " + profile.name() + ".");
 			} else {
 				fail(ctx.getSource(), "Nothing stored for " + profile.name() + ".");
@@ -424,7 +472,14 @@ public final class TownhallCommand {
 	private static boolean releaseToFallback(ServerPlayer player, TownhallConfig config) {
 		if (!TeleportService.sendToFallback(player, config)) return false;
 		ReturnPositionStorage.get(player.level().getServer()).set(player.getUUID(), PlayerState.EMPTY);
+		TeleportService.resendCommands(player);
 		return true;
+	}
+
+	/** The player's stored state names this location (an operator sent them there). */
+	private static boolean staysAt(CommandSourceStack src, String id) {
+		return src.getEntity() instanceof ServerPlayer player
+				&& ReturnPositionStorage.get(src.getServer()).state(player.getUUID()).location().map(id::equals).orElse(false);
 	}
 
 	private static String confinedMessage(TownhallConfig config, ServerPlayer player) {
@@ -459,6 +514,25 @@ public final class TownhallCommand {
 		return TownhallMod.isOperator(source.permissions());
 	}
 
+	/**
+	 * Operator check for what a player does for themselves: command whitelist, going somewhere, return, cooldown, adminOnly.
+	 * Sign click commands (and command blocks using execute as) run with GAMEMASTER source permissions, so for a player the
+	 * player's own permissions decide. Only the server console acting through a player keeps its own rights.
+	 */
+	public static boolean isOperatorSelf(CommandSourceStack source) {
+		if (source.getEntity() instanceof ServerPlayer player && ((CommandSourceStackAccessor) source).townhall$source() != source.getServer()) {
+			return TownhallMod.isOperator(player.permissions());
+		}
+		return isOperator(source);
+	}
+
+	/** Saves the config; if that fails, tells the admin (the change is live but not written) and returns false. */
+	public static boolean saveConfig(CommandSourceStack source) {
+		if (TownhallMod.CONFIG.save()) return true;
+		source.sendFailure(Component.literal(ConfigManager.NOT_SAVED));
+		return false;
+	}
+
 	private static ServerPlayer requirePlayer(CommandSourceStack source) {
 		if (source.getEntity() instanceof ServerPlayer player) return player;
 		source.sendFailure(Component.literal("This command must be executed by a player."));
@@ -468,7 +542,7 @@ public final class TownhallCommand {
 	/** Players (not operators, by default) must wait between uses. Returns true and tells the player when blocked. */
 	private static boolean onCooldown(CommandSourceStack source, ServerPlayer player) {
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		if (config.commands.cooldownSeconds <= 0 || (config.commands.operatorsBypassCooldown && isOperator(source))) return false;
+		if (config.commands.cooldownSeconds <= 0 || (config.commands.operatorsBypassCooldown && isOperatorSelf(source))) return false;
 		long now = System.currentTimeMillis();
 		Long last = LAST_USE.get(player.getUUID());
 		long waitMs = last == null ? 0 : last + config.commands.cooldownSeconds * 1000L - now;

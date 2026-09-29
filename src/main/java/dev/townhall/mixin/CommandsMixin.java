@@ -29,8 +29,8 @@ abstract class CommandsMixin {
 	@Inject(method = "performCommand", at = @At("HEAD"), cancellable = true)
 	private void townhall$limitConfinedPlayers(ParseResults<CommandSourceStack> parse, String command, CallbackInfo ci) {
 		CommandSourceStack source = parse.getContext().getSource();
-		if (!(source.getEntity() instanceof ServerPlayer player) || TownhallCommand.isOperator(source)
-				|| TownhallMod.isOperator(player.permissions())) return;
+		// The player's own rights decide: sign click commands run with GAMEMASTER source permissions for anyone.
+		if (!(source.getEntity() instanceof ServerPlayer player) || TownhallCommand.isOperatorSelf(source)) return;
 		String root = command.startsWith("/") ? command.substring(1) : command;
 		int space = root.indexOf(' ');
 		root = (space < 0 ? root : root.substring(0, space)).toLowerCase(Locale.ROOT);

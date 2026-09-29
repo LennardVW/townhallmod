@@ -16,13 +16,13 @@ User-facing docs (German): `README.md`.
 | Loom | 1.18.2 (`net.fabricmc.fabric-loom`, `implementation` deps, no `mappings`) |
 | Java | 25 |
 
-Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Nicknames in commands: `EntitySelectorMixin`, `EntitySelectorParserMixin`, `GameProfileArgumentMixin`, `CachedUserNameToIdResolverMixin`, completion: `CommandNodeInspectorMixin`, `CommandSourceStackMixin` (see Nicknames below). Everything else uses Fabric API events.
+Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `getName()` inside `getDisplayName()` for the nickname (chat), `ServerPlayerMixin` returns it from `getTabListDisplayName()` (tab list). `CommandsMixin` (command whitelist for confined and not-yet-onboarded players), `LevelMixin` (per-dimension difficulty), `BlockItemMixin` (block placement for `build: false`), `ProjectileMixin` (player projectiles vs. world objects/blocks for `build: false`), `PlayerMixin` (`causeFoodExhaustion` for `hunger: false`), `EnvironmentAttributeSystemMixin` + `ServerCommonPacketListenerImplMixin` (fixed `time`), `ServerLevelMixin` (fixed `weather`). `LevelMixin` also pins `getDefaultClockTime()`. Nicknames in commands: `EntitySelectorMixin`, `EntitySelectorParserMixin`, `GameProfileArgumentMixin`, `CachedUserNameToIdResolverMixin`, completion: `CommandNodeInspectorMixin`, `CommandSourceStackMixin` (see Nicknames below). Everything else uses Fabric API events.
 
 ## Commands
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 45 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 65 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
 ```
 
@@ -33,7 +33,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `TownhallMod.java` | Entrypoint: loads config, registers commands and events (server tick, respawn, join, level change), logs dimension status |
 | `command/TownhallCommand.java` | Builds one Brigadier root per location (`build(command, id)`), all subcommands, cooldown, permission check |
 | `config/TownhallConfig.java` | Config model + `validate()` (returns a list of errors) |
-| `config/ConfigManager.java` | Load/reload/save `config/townhall.json`; atomic save; invalid file never replaces the active config |
+| `config/ConfigManager.java` | Load/reload/save `config/townhall.json`; atomic save (plain move if the FS can't); invalid file never replaces the active config; `save()` returns false and writes nothing while the last load failed (`canSave()`), so the admin's broken file is never overwritten |
 | `storage/ReturnLocation.java` | Record: dimension, x/y/z, yaw, pitch, timestamp, optional name (debug only). Codec |
 | `storage/PlayerState.java` | Record: `returnPosition`, `location` (last location id), `confined`, `remainingMillis` (timed stay) |
 | `storage/ReturnPositionStorage.java` | `SavedData` with `Map<UUID, PlayerState>`, via `server.getDataStorage()` → `<world>/data/townhall/players.dat` |
@@ -56,24 +56,25 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 | `mixin/EntitySelectorMixin.java`, `mixin/EntitySelectorParserMixin.java` | Plain names in entity arguments: fallback to an online player's nickname when `PlayerList.getPlayerByName` finds nobody and the name is no known real name; parser reads unquoted names with any letters/digits (ü, ß) and quoted names up to 32 chars |
 | `mixin/GameProfileArgumentMixin.java` | Plain names in profile arguments (`/playtime`, `/nick`, `/builder`, `/op`): nickname (also offline) → owner, before the name cache (offline mode invents a profile for every unknown name) |
 | `mixin/CommandNodeInspectorMixin.java`, `mixin/CommandSourceStackMixin.java` | Command tree marks entity/profile arguments without own suggestions as `ask_server`; server-side `getOnlinePlayerNames` adds typable nicknames of online players |
-| `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors |
+| `key/Keys.java`, `key/DoorLocks.java`, `command/KeyCommand.java` | Door keys: tripwire hook with `custom_data.townhall_key` (UUID); locks in `SavedData` keyed "dim|x|y|z" of the lower half; `UseBlockCallback` links/unlinks/blocks (resends both halves), break guard; admin key only for operators; `DoorBlockMixin` blocks redstone (`neighborChanged`) and mobs (`setOpen`) on locked doors and keeps a locked lower half when its support goes (`updateShape` DOWN); linking needs `Protection.mayBuild`; break guard also covers the block under a locked door; `PistonStructureResolverMixin` (resolve fails if a locked door is in toPush/toDestroy – doors are POPPED, so `isPushable` alone doesn't help), `LockedDoorExplosionMixin` (own `@ModifyVariable` on `interactWithBlocks`, chains with `ServerExplosionMixin`), `BreakDoorGoalMixin` (zombies), `BlockBehaviourMixin` (`onPlace` of a new door drops a stale lock, `affectNeighborsAfterRemoval` deletes the lock); `/key new|copy` 10 s cooldown per UUID (ops exempt); `CraftingMenuMixin` + `CrafterBlockMixin`: keys are no crafting ingredient |
 | `activity/Afk.java`, `activity/Playtime.java`, `activity/ActivityService.java`, `command/ActivityCommands.java` | AFK once per second (look/walk; chat and commands via message events), `[AFK]` in `getTabListDisplayName`; play time `SavedData` (active time only, seeded from `Stats.PLAY_TIME`), `/playtime [player|top]`, `/afk` |
 | `display/JoinMessages.java`, `display/TabList.java`, `command/ChatDisplayCommands.java` | Vanilla join/leave suppressed via `ALLOW_GAME_MESSAGE` (translation keys), own templates with `{player}`; first join = `Stats.LEAVE_GAME == 0`; tab header/footer every 2 s with placeholders |
 | `command/RulesCommand.java` | `/rules`, `/regeln`, `accept`/`akzeptieren`, op `reset <player>` |
 | `util/Text.java` | `&` color codes → legacy §, title packets |
 | `mixin/BlockItemMixin.java`, `mixin/PlayerMixin.java` | Placement and hunger hooks (no Fabric event for them) |
-| `mixin/CommandsMixin.java` | `Commands.performCommand` HEAD: confined non-op players may only run `confinement.allowedCommands` |
+| `mixin/CommandsMixin.java` | `Commands.performCommand` HEAD: confined non-op players may only run `confinement.allowedCommands` (op = `TownhallCommand.isOperatorSelf`) |
+| `mixin/CommandSourceStackAccessor.java` | Reads the private `CommandSourceStack.source` (player, console, sign = `CommandSource.NULL`, command block) for `isOperatorSelf` |
 | `mixin/LevelMixin.java` | Adds `Level.getDifficulty()` override (vanilla only has the `LevelAccessor` default) |
-| `src/gametest/.../TownhallGameTests.java` | 45 GameTests |
+| `src/gametest/.../TownhallGameTests.java` | 65 GameTests |
 
 ## Core rules
 
 **Entering (`sendTo`)**
-1. Confined players can't enter anything unless the source is an operator.
+1. Confined players can't enter anything unless the source is an operator (self-commands: `isOperatorSelf`, see Commands).
 2. Already in this location's world and last location is this one (or unknown) → `ALREADY_THERE`, nothing saved. Operator `send` skips this check.
 3. The target dimension is looked up on **every** call (the multiworld mod may register it late). Missing → `UNAVAILABLE`, no crash.
 4. Teleport first; only then store state.
-5. The return position is saved **only if the player was outside all location worlds**. Moving between locations keeps the original spot.
+5. The return position is saved **only if the player was outside all location worlds**. Moving between locations keeps the original spot. A stored position is also kept while the state names a location (the location may have moved to another world meanwhile).
 6. `confined = !location.isEscapable() && !TownhallMod.isOperator(player.permissions())` – the **target's** own op status decides, so operators are never confined (also when they send themselves). Leash, respawn and command whitelist skip operators too.
 7. `durationMillis` (from `send <player> <minutes>`) is stored as `remainingMillis`.
 
@@ -98,7 +99,8 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 - Known gap: a few vanilla spots read `LevelData.getDifficulty()` directly (ender pearl endermites, nether portal piglins, creaking heart). Vanilla `/difficulty` resends the global value to clients (display only).
 
 **World rules** (`dimensions.<id>`: `difficulty`, `pvp`, `build`, `hunger`, `fallDamage`; null = vanilla)
-- `build: false`: operators exempt. Blocks break, `BlockItem.place`, world-changing items on blocks (buckets, flint, bone meal, spawn eggs, hanging/armor stand/crystal/minecart/boat items, `#axes/#shovels/#hoes`), hitting non-living entities or armor stands, using item frames/armor stands. Doors/buttons/containers stay usable.
+- `build: false`: operators exempt. Blocks break, `BlockItem.place`, world-changing items on blocks (buckets, flint, bone meal, spawn eggs, hanging/armor stand/crystal/minecart/boat items, dye, ink sacs, honeycomb, shears, brush, ender eye, potions, `#axes/#shovels/#hoes`), right-clicking signs, flower pots, repeaters, comparators, note blocks, daylight detectors (any hand), hitting non-living entities or armor stands, using item frames/armor stands, projectiles of non-building players on world objects and blocks (`ProjectileMixin`).
+- Usable blocks (`Protection.isUsableBlock`: hand-openable doors/trapdoors, fence gates, buttons, levers, beds, anything with `getMenuProvider`) return PASS when not sneaking, whatever the item: vanilla `ServerPlayerGameMode.useItemOn` runs the block's use first and these always consume the click, so the item never runs. Iron doors/trapdoors pass the click on, so they are not in that list.
 - Commands: `worldrule <dimension> [rule] [true|false|default]`, `worldrule <dimension> time [day|noon|night|midnight|<0-23999>|default]`, `worldrule <dimension> weather [clear|rain|thunder|default]`; saved to config, `DimensionSettings.rebuild` after every change.
 
 **Fixed time and weather** (`dimensions.<id>.time` / `.weather`)
@@ -111,7 +113,8 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`): `PlayerMixin` also swaps `
 
 **Onboarding**
 - `JOIN`: if accepted version < `rulesVersion`, add to in-memory pending map (with join position) and send texts.
-- Restricted = pending + `restrictUntilAccepted` + not operator: commands except `rules`/`regeln` blocked (`CommandsMixin`), chat blocked, no damage, no building/using, pulled back if > 3 blocks from join position, reminder every `reminderSeconds`.
+- Restricted = pending + `restrictUntilAccepted` + not operator + `needsToAccept` (so `enabled: false` or a lowered `rulesVersion` frees pending players at once): commands except `rules`/`regeln` blocked (`CommandsMixin`), chat blocked, no damage, no building/using, pulled back if > 3 blocks from the anchor, reminder every `reminderSeconds`.
+- The anchor is the join position; every teleport through `TeleportService` moves it (`Onboarding.moved`), so a pending player sent to the prison stays there. `accept()` always removes the player from the pending map.
 - Operators get the texts but no restrictions.
 
 **Safe spot** (`SafeLocationFinder.isSafe`): inside world bounds and world border, no collision for the standing hitbox, no `BlockTags.DANGEROUS_FOR_TELEPORTATION` or lava in/below the body, and ground within 1 block below (or water at the feet).
@@ -119,16 +122,20 @@ The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `le
 
 **Commands**
 - Per location root: `/<cmd>`, `return`, `return <player>` (op), `send <player> [minutes]` (op), `setspawn` (op), `reload`, `status`, `debug <player>`, `clearreturn <player>`, `difficulty <dimension> [peaceful|easy|normal|hard|default]` (all op).
-- `adminOnly` roots are hidden from non-operators (`requires`).
-- Operator = `source.permissions().hasPermission(...)`, mapped from `commands.operatorPermissionLevel` (1–4).
+- `adminOnly` roots are hidden from non-operators (`requires`), except for a player whose stored state names that location (sent there, so `return` works). `TeleportService.resendCommands` resends the tree after every state change.
+- Operator = `source.permissions().hasPermission(...)`, mapped from `commands.operatorPermissionLevel` (1–4). Op-only subcommands (`send`, `return <player>`, `setspawn`, ...) use the source's permissions.
+- Self-actions (enter, `return`, cooldown, adminOnly, command whitelist) use `isOperatorSelf`: for a player the **player's own** permissions decide, because sign click commands run with GAMEMASTER source permissions (`CommandSource.NULL`). Only the console acting through a player (`withEntity`, tests' `opAt`) keeps its own rights.
 - Cooldown is in memory, per UUID, shared by all player commands.
 - Root nodes are built per **command name** (`build(command)`) and resolve their location id on every use (`idFor`). Renamed/deleted locations: the old node's `requires` fails, so it disappears after `sendCommands`. New names: `refreshCommands(server)` registers missing roots live and resends the command tree (called by `/location` and `/townhall reload`).
-- `isForeignCommand` blocks taking names of vanilla/other-mod commands; names this mod registered (`REGISTERED`) may be reused.
-- `/location delete` refuses while any active (confined/timed) player is held there.
+- `isForeignCommand` blocks taking names of vanilla/other-mod commands. Our roots are recognized by their requirement class (`MayUse`), not by name, so a reused name stays correct after renames and datapack reloads. `register`/`refreshCommands` skip (and log) a config name that is already a foreign command instead of letting Brigadier merge into it; `/townhall reload` rejects such a file.
+- `/location delete` refuses while any active (confined/timed) player is held there; `/townhall reload` refuses a file that drops such a location (`reloadProblems`).
+- `/location create|setspawn|set dimension` refuse the overworld and the fallback world; `validate()` reports them too.
+- `escapable true` (command or reload) clears `confined` of everyone stored at that location; return position and timer stay.
 
 **Builders** (`dimensions.<id>.builders`: UUID → name)
 - `Protection.mayBuild` = build rule || builder in this world || operator.
 - `/builder creative` sets the `townhall.builder_creative` tag. `Protection.enforceBuilderMode` (join, world change, respawn, after `remove`) puts non-op players back to survival if they have the tag or are a builder anywhere but not here, and resends builders' command tree.
+- `/townhall reload` calls `enforceBuilderMode` for all online players (builders removed in the file).
 - WorldEdit asks `FabricPermissionsProvider` first (Fabric permission API, `worldedit.a.b` → `worldedit:a.b`), then lucko v0, then op level. Our handler answers only for builders in their world, `null` otherwise.
 - World rules `mobs` (NaturalSpawner.spawnForChunk, BaseSpawner.serverTick, ServerLevel.tickCustomSpawners), `fire` (FireBlock.tick removes the fire), `explosions` (ServerExplosion.interactWithBlocks list → empty, chains with ChestLock's ModifyVariable), `leafDecay` (LeavesBlock.randomTick).
 - GameProfileArgument rejects `@s` ("selector includes entities"); tests use `@p[distance=..0.5]`.
@@ -141,6 +148,8 @@ The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `le
 - All world access and teleports stay on the server thread (commands and events already are).
 - No per-tick work. Everything is command- or event-driven.
 - `ConfigManager.reload()` must stay all-or-nothing.
+- Every command that changes the config calls `TownhallCommand.saveConfig(source)` and reports "Config not saved" instead of success when it returns false.
+- Texts filled in with `.formatted(...)` (`messages.*`, `alreadyHereMessage`) are checked in `validate()` with sample args of the right types; add new ones there.
 - **Never `@Redirect`** a vanilla call: the live server runs mc-worlds, c2me, lithium, worldedit, and two redirects on one call crash the server on start (1.4.0 did this with mc-worlds' weather broadcast). Use MixinExtras `@WrapOperation` / `@ModifyExpressionValue`, which chain. `src/gametest/.../mixin/OtherModWeatherRedirectMixin` keeps a foreign redirect on that call as a regression test.
 - Keep `PlayerState` codec fields optional with defaults, so old `players.dat` files still load.
 - `Location.confineSentPlayers` is the legacy name (read only through `isEscapable()`); write `escapable`.
@@ -170,4 +179,6 @@ new feature → minor (1.3.0 → 1.4.0), bug fix only → patch (1.3.0 → 1.3.1
 - Timers and pull-back are tested by calling `ConfinementService.check(server, elapsedMillis)` directly (deterministic, no waiting).
 - Command blocking is tested with a stand-in command (`escapetest`) registered on the live dispatcher.
 - Nickname tests use random nicknames per run (the test world keeps `nicknames.dat`) and reset them in `finally`. All mock players share one profile name, and `NickPackets.rewrite` never renames the viewer's own name, so rename-map checks read `Nicknames.headNamesByRealName()` directly. Team packets are replayed against a plain `Scoreboard` that mirrors `ClientPacketListener.handleSetPlayerTeamPacket`.
+- Sign clicks are simulated with the same source vanilla builds (`clickSign`: `CommandSource.NULL`, GAMEMASTER, player as entity).
+- Tests that reload the live config first `save()`, keep the file text, and in `finally` write it back and run `/townhall reload` (a failed reload pauses saving). `Capture` collects what a command tells its sender.
 - Not covered: real vanilla client, real death/respawn (the test calls `keepConfined` directly), difficulty display on a real client.

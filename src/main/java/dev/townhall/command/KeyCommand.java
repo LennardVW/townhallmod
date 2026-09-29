@@ -22,7 +22,10 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * <pre>
@@ -35,7 +38,23 @@ import java.util.Optional;
  */
 public final class KeyCommand {
 
+	/** Keys are free, so /key new and /key copy have a cooldown per player (operators exempt). In memory only. */
+	static final long COOLDOWN_MILLIS = 10_000;
+	private static final Map<UUID, Long> LAST_NEW = new HashMap<>();
+	private static final Map<UUID, Long> LAST_COPY = new HashMap<>();
+
 	private KeyCommand() {}
+
+	/** Seconds left, or 0 if the player may run it now (then the use is recorded). */
+	private static long cooldownLeft(CommandSourceStack source, ServerPlayer player, Map<UUID, Long> last) {
+		if (TownhallCommand.isOperator(source)) return 0;
+		long now = System.currentTimeMillis();
+		Long previous = last.get(player.getUUID());
+		if (previous != null && now - previous < COOLDOWN_MILLIS) return (COOLDOWN_MILLIS - (now - previous) + 999) / 1000;
+		last.values().removeIf(t -> now - t >= COOLDOWN_MILLIS); // keeps the map small
+		last.put(player.getUUID(), now);
+		return 0;
+	}
 
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 		dispatcher.register(Commands.literal("key")
@@ -51,6 +70,8 @@ public final class KeyCommand {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		String name = StringArgumentType.getString(ctx, "name").strip();
 		if (name.isEmpty() || name.length() > 32) return fail(ctx, "Key names need 1-32 characters.");
+		long wait = cooldownLeft(ctx.getSource(), player, LAST_NEW);
+		if (wait > 0) return fail(ctx, "Please wait " + wait + " s before making another key.");
 		give(player, Keys.newKey(name));
 		TownhallMod.LOGGER.info("{} made the key {}", player.getPlainTextName(), name);
 		return ok(ctx, "New key \"" + name + "\". Right-click a door with it to lock the door.");
@@ -62,6 +83,8 @@ public final class KeyCommand {
 		boolean admin = Keys.isAdminKey(held);
 		if (Keys.keyId(held).isEmpty() && !admin) return fail(ctx, "Hold a key in your main hand.");
 		if (admin && !TownhallCommand.isOperator(ctx.getSource())) return fail(ctx, "Only operators can copy the admin key.");
+		long wait = cooldownLeft(ctx.getSource(), player, LAST_COPY);
+		if (wait > 0) return fail(ctx, "Please wait " + wait + " s before copying another key.");
 		ServerPlayer receiver = target == null ? player : target;
 		give(receiver, Keys.copy(held));
 		String name = admin ? "Admin Key" : Keys.keyName(held);

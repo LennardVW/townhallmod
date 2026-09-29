@@ -15,7 +15,12 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.commands.Commands;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.ParseResults;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.world.phys.Vec2;
 import dev.townhall.storage.ReturnPositionStorage;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -31,6 +36,7 @@ import net.minecraft.world.phys.Vec3;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -600,6 +606,7 @@ public class TownhallGameTests {
 	public void locationsAreManagedByCommands(GameTestHelper h) {
 		ServerPlayer admin = playerOnFloor(h, new Vec3(2.5, 1, 4.5), 45f, 0f);
 		MinecraftServer server = h.getLevel().getServer();
+		admin.teleportTo(server.getLevel(Level.NETHER), 80.5, 80, 80.5, java.util.Set.of(), 45f, 0f, true); // locations need a world of their own
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		CommandSourceStack player = server.createCommandSourceStack().withEntity(admin).withPermission(net.minecraft.server.permissions.PermissionSet.NO_PERMISSIONS);
 		try {
@@ -676,6 +683,10 @@ public class TownhallGameTests {
 			}
 			h.assertFalse(perms.checkPermission(net.minecraft.resources.Identifier.parse("worldedit:reload"), false), "no admin WorldEdit");
 			h.assertFalse(perms.checkPermission(net.minecraft.resources.Identifier.parse("worldedit:world"), false), "can't switch WorldEdit to another world");
+			for (String node : List.of("worldedit:scripting.execute", "worldedit:schematic.delete", "worldedit:setnbt")) {
+				h.assertFalse(perms.checkPermission(net.minecraft.resources.Identifier.parse(node), false), "admin-only WorldEdit node " + node);
+			}
+			h.assertTrue(perms.checkPermission(net.minecraft.resources.Identifier.parse("worldedit:schematic.save"), false), "schematics can still be saved");
 			h.assertFalse(perms.checkPermission(net.minecraft.resources.Identifier.parse("othermod:fly"), false), "other mods' permissions untouched");
 			server.getCommands().performPrefixedCommand(asBuilder, "builder creative");
 			h.assertTrue(builder.entityTags().contains(Protection.BUILDER_CREATIVE_TAG), "creative via /builder");
@@ -964,6 +975,764 @@ public class TownhallGameTests {
 		h.assertFalse(end.getBlockState(leaves).is(net.minecraft.world.level.block.Blocks.OAK_LEAVES), "leaves decay again");
 		end.explode(null, tnt.getX() + 0.5, tnt.getY(), tnt.getZ() + 0.5, 3f, Level.ExplosionInteraction.TNT);
 		h.assertFalse(end.getBlockState(tnt.below()).is(net.minecraft.world.level.block.Blocks.STONE), "explosions break blocks again");
+		h.succeed();
+	}
+
+	// ------------------------------------------------------------ 1.12.1 fixes (bug ids from the review)
+
+	/** Collects what a command tells its sender, so tests can check success and failure texts. */
+	private static final class Capture implements CommandSource {
+		final List<String> messages = new ArrayList<>();
+
+		@Override
+		public void sendSystemMessage(Component message) {
+			messages.add(message.getString());
+		}
+
+		@Override
+		public boolean acceptsSuccess() {
+			return true;
+		}
+
+		@Override
+		public boolean acceptsFailure() {
+			return true;
+		}
+
+		@Override
+		public boolean shouldInformAdmins() {
+			return false;
+		}
+
+		boolean said(String part) {
+			return messages.stream().anyMatch(m -> m.toLowerCase(java.util.Locale.ROOT).contains(part.toLowerCase(java.util.Locale.ROOT)));
+		}
+	}
+
+	/** Exactly what a sign click command gets: no real sender, the player as entity, GAMEMASTER permissions. */
+	private static void clickSign(ServerPlayer p, String command) {
+		MinecraftServer server = p.level().getServer();
+		CommandSourceStack sign = new CommandSourceStack(CommandSource.NULL, p.position(), Vec2.ZERO, (ServerLevel) p.level(),
+				LevelBasedPermissionSet.GAMEMASTER, server, p);
+		server.getCommands().performPrefixedCommand(sign, command);
+	}
+
+	@GameTest
+	public void signCommandsUsePlayersOwnRights(GameTestHelper h) { // A1
+		ServerPlayer p = playerOnFloor(h, new Vec3(1.5, 1, 1.5), 0f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		registerEscapeCommand(server);
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+
+		clickSign(p, "townhall");
+		h.assertTrue(inTownhall(p), "a /townhall sign works for normal players");
+		clickSign(p, "townhall return");
+		h.assertFalse(inTownhall(p), "a return sign works for free players");
+
+		clickSign(p, "gefaengnis");
+		h.assertFalse(atPrison(p), "a sign doesn't open an adminOnly location to players");
+		h.assertTrue(storage.state(p.getUUID()).isEmpty(), "nothing stored");
+
+		TownhallMod.CONFIG.get().commands.cooldownSeconds = 3;
+		try {
+			clickSign(p, "townhall");
+			h.assertTrue(inTownhall(p), "sign after the cooldown works");
+			clickSign(p, "townhall return");
+			h.assertTrue(inTownhall(p), "the sign doesn't skip the player's cooldown");
+		} finally {
+			TownhallMod.CONFIG.get().commands.cooldownSeconds = 0;
+		}
+		run(p, "townhall return");
+
+		opAt(p, "gefaengnis send @s");
+		h.assertTrue(atPrison(p) && storage.state(p.getUUID()).confined(), "confined");
+		int before = escapeCount;
+		clickSign(p, "escapetest");
+		h.assertTrue(escapeCount == before, "a sign doesn't bypass the prison's command whitelist");
+		clickSign(p, "townhall return");
+		h.assertTrue(atPrison(p) && storage.state(p.getUUID()).confined(), "a return sign doesn't release a prisoner");
+		opAt(p, "gefaengnis return @s");
+		h.assertTrue(storage.state(p.getUUID()).isEmpty(), "the console acting through the player still releases (op helper keeps working)");
+		h.succeed();
+	}
+
+	@GameTest
+	public void brokenConfigFileIsNeverOverwritten(GameTestHelper h) throws IOException { // A2 (ConfigManager)
+		Path dir = Files.createTempDirectory("townhall-save");
+		ConfigManager defaults = new ConfigManager(dir.resolve("defaults.json"));
+		defaults.loadOrCreate();
+		String valid = Files.readString(dir.resolve("defaults.json"));
+
+		Path file = dir.resolve("townhall.json");
+		Files.writeString(file, "{ \"locations\": { broken");
+		ConfigManager manager = new ConfigManager(file);
+		manager.loadOrCreate(); // defaults in memory
+		manager.get().afkMinutes = 42;
+		manager.save();
+		h.assertTrue(Files.readString(file).equals("{ \"locations\": { broken"), "defaults don't overwrite the admin's broken file");
+
+		Files.writeString(file, valid);
+		h.assertTrue(manager.reload().isEmpty(), "fixed file loads");
+		manager.get().afkMinutes = 42;
+		manager.save();
+		h.assertTrue(Files.readString(file).contains("\"afkMinutes\": 42"), "saving works again after a successful reload");
+
+		Files.writeString(file, "{ \"afkMinutes\": \"oops\" ");
+		h.assertFalse(manager.reload().isEmpty(), "broken again");
+		manager.save();
+		h.assertTrue(Files.readString(file).equals("{ \"afkMinutes\": \"oops\" "), "a failed reload also pauses saving");
+		h.succeed();
+	}
+
+	@GameTest
+	public void saveReportsWriteErrors(GameTestHelper h) throws IOException { // A2 (IO errors)
+		Path dir = Files.createTempDirectory("townhall-io");
+		Path blocker = dir.resolve("not-a-folder");
+		Files.writeString(blocker, "x");
+		ConfigManager manager = new ConfigManager(blocker.resolve("townhall.json")); // parent is a file: can't be written
+		manager.loadOrCreate();
+		h.assertFalse(manager.save(), "save reports a write error");
+		ConfigManager ok = new ConfigManager(dir.resolve("townhall.json"));
+		ok.loadOrCreate();
+		h.assertTrue(ok.save(), "save reports success");
+		h.succeed();
+	}
+
+	@GameTest
+	public void commandsReportUnsavedConfig(GameTestHelper h) throws IOException { // A2 (commands)
+		MinecraftServer server = h.getLevel().getServer();
+		ConfigManager config = TownhallMod.CONFIG;
+		config.save();
+		String good = Files.readString(config.path());
+		int afk = config.get().afkMinutes;
+		Capture out = new Capture();
+		CommandSourceStack admin = server.createCommandSourceStack().withSource(out);
+		try {
+			Files.writeString(config.path(), "{ broken by the admin");
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertTrue(out.said("Config not reloaded"), "reload fails: " + out.messages);
+			out.messages.clear();
+			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
+			h.assertTrue(Files.readString(config.path()).equals("{ broken by the admin"), "the admin's file is not overwritten");
+			h.assertTrue(out.said("not saved"), "the admin is told it wasn't saved: " + out.messages);
+			h.assertFalse(out.said("Players are AFK after"), "no success message: " + out.messages);
+		} finally {
+			Files.writeString(config.path(), good);
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+		}
+		h.assertTrue(config.get().afkMinutes == afk, "reload restored the file's value");
+		out.messages.clear();
+		server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
+		try {
+			h.assertTrue(Files.readString(config.path()).contains("\"afkMinutes\": " + (afk + 1)), "saved again after a working reload");
+			h.assertFalse(out.said("not saved"), "no warning when saved: " + out.messages);
+		} finally {
+			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + afk);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void reloadKeepsLocationWithPrisoners(GameTestHelper h) throws IOException { // A3
+		MinecraftServer server = h.getLevel().getServer();
+		ConfigManager config = TownhallMod.CONFIG;
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		config.save(); // the file has no a3test ...
+		String good = Files.readString(config.path());
+		TownhallConfig.Location removed = new TownhallConfig.Location();
+		removed.command = "a3test";
+		removed.dimension = "minecraft:the_nether";
+		config.get().locations.put("a3test", removed); // ... the active config has it, like after editing the file
+		UUID prisoner = UUID.randomUUID();
+		storage.set(prisoner, PlayerState.EMPTY.withStay("a3test", true, Optional.empty()));
+		Capture out = new Capture();
+		CommandSourceStack admin = server.createCommandSourceStack().withSource(out);
+		try {
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertTrue(config.get().locations.containsKey("a3test"), "reload refused: the location still holds a prisoner");
+			h.assertTrue(out.said("a3test") && out.said("Config not reloaded"), "admin is told why: " + out.messages);
+
+			storage.remove(prisoner);
+			out.messages.clear();
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertFalse(config.get().locations.containsKey("a3test"), "without prisoners the location can be removed: " + out.messages);
+		} finally {
+			storage.remove(prisoner);
+			config.get().locations.remove("a3test");
+			Files.writeString(config.path(), good);
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void onboardingOffFreesPendingPlayers(GameTestHelper h) { // A4
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig.Onboarding cfg = TownhallMod.CONFIG.get().onboarding;
+		int version = cfg.rulesVersion;
+		cfg.enabled = true;
+		try {
+			ServerPlayer p = h.makeMockServerPlayerInLevel();
+			h.assertTrue(Onboarding.isRestricted(p), "pending after joining");
+			cfg.enabled = false;
+			h.assertFalse(Onboarding.isRestricted(p), "turning onboarding off frees pending players");
+			cfg.enabled = true;
+			h.assertTrue(Onboarding.isRestricted(p), "on again: restricted again");
+
+			cfg.rulesVersion = 0;
+			h.assertFalse(Onboarding.isRestricted(p), "nothing to accept after lowering rulesVersion");
+			run(p, "rules accept");
+			cfg.rulesVersion = version;
+			h.assertFalse(Onboarding.isRestricted(p), "accept always ends the pending state");
+
+			ServerPlayer q = h.makeMockServerPlayerInLevel();
+			h.assertTrue(Onboarding.isRestricted(q), "second player pending");
+			Vec3 joined = q.position();
+			cfg.enabled = false;
+			q.absSnapTo(joined.x + 10, joined.y, joined.z, 0f, 0f);
+			Onboarding.check(server);
+			h.assertTrue(q.position().distanceTo(joined) > 5, "no pull-back once onboarding is off");
+		} finally {
+			cfg.rulesVersion = version;
+			cfg.enabled = false;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void pendingPlayerSentToPrisonStaysThere(GameTestHelper h) { // A5
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig.Onboarding cfg = TownhallMod.CONFIG.get().onboarding;
+		TownhallMod.CONFIG.get().locations.values().forEach(l -> l.dimension = "minecraft:the_nether");
+		cfg.enabled = true;
+		ServerPlayer p = h.makeMockServerPlayerInLevel();
+		try {
+			h.assertTrue(Onboarding.isRestricted(p), "hasn't accepted the rules");
+			opAt(p, "gefaengnis send @s");
+			h.assertTrue(atPrison(p), "sent to prison");
+			Onboarding.check(server);
+			h.assertTrue(atPrison(p), "onboarding doesn't pull them back to where they joined");
+			ConfinementService.check(server, 0);
+			Onboarding.check(server);
+			h.assertTrue(atPrison(p), "no ping-pong between prison and join spot");
+
+			TownhallConfig.Spot s = prisonSpawn();
+			p.absSnapTo(s.x + 10, s.y, s.z, 0f, 0f);
+			Onboarding.check(server);
+			h.assertTrue(atPrison(p), "still held until they accept, now at the prison");
+		} finally {
+			opAt(p, "gefaengnis return @s");
+			cfg.enabled = false;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void noLocationsInSharedWorlds(GameTestHelper h) { // A6
+		ServerPlayer admin = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig config = TownhallMod.CONFIG.get();
+		try {
+			opAt(admin, "location create a6test");
+			h.assertFalse(config.locations.containsKey("a6test"), "no location in the overworld");
+
+			admin.teleportTo(server.getLevel(Level.NETHER), 70.5, 80, 70.5, java.util.Set.of(), 0f, 0f, true);
+			opAt(admin, "location create a6test");
+			TownhallConfig.Location l = config.locations.get("a6test");
+			h.assertTrue(l != null && l.dimension.equals("minecraft:the_nether"), "a world of its own works");
+
+			Vec3 overworld = h.absoluteVec(new Vec3(2.5, 1, 2.5));
+			admin.teleportTo(h.getLevel(), overworld.x, overworld.y, overworld.z, java.util.Set.of(), 0f, 0f, true);
+			opAt(admin, "location setspawn a6test");
+			h.assertTrue(l.dimension.equals("minecraft:the_nether"), "setspawn refuses the overworld");
+			opAt(admin, "location set a6test dimension minecraft:overworld");
+			h.assertTrue(l.dimension.equals("minecraft:the_nether"), "set dimension refuses the overworld");
+			opAt(admin, "location set a6test dimension minecraft:the_end");
+			h.assertTrue(l.dimension.equals("minecraft:the_end"), "set dimension to another own world works");
+
+			TownhallConfig file = new TownhallConfig();
+			h.assertTrue(file.validate().isEmpty(), "default config is valid");
+			file.locations.get("townhall").dimension = "minecraft:overworld";
+			h.assertTrue(file.validate().isEmpty(), "an existing config with a location in the overworld still loads (only a log warning)");
+		} finally {
+			config.locations.remove("a6test");
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void movedLocationKeepsReturnPosition(GameTestHelper h) { // A7
+		ServerPlayer p = playerOnFloor(h, new Vec3(1.5, 1, 3.5), 21f, 3f);
+		MinecraftServer server = h.getLevel().getServer();
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		Vec3 start = p.position();
+		Level home = p.level();
+		TownhallConfig config = TownhallMod.CONFIG.get();
+		run(p, "townhall");
+		h.assertTrue(inTownhall(p), "in the Townhall (Nether)");
+		config.locations.values().forEach(l -> l.dimension = "minecraft:the_end"); // an admin moves the locations to another world
+		try {
+			run(p, "townhall");
+			h.assertTrue(p.level().dimension().equals(Level.END), "went to the moved Townhall");
+			h.assertTrue(storage.get(p.getUUID()).orElseThrow().dimension().equals(home.dimension()), "original return position kept");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 21f, 3f);
+
+			// Control: someone standing in the old world (no location there anymore) does get that spot saved.
+			p.teleportTo(server.getLevel(Level.NETHER), 30.5, 80, 30.5, java.util.Set.of(), 0f, 0f, true);
+			run(p, "townhall");
+			h.assertTrue(storage.get(p.getUUID()).orElseThrow().dimension().equals(Level.NETHER), "return position saved when coming from a normal world");
+		} finally {
+			config.locations.values().forEach(l -> l.dimension = "minecraft:the_nether");
+			storage.remove(p.getUUID());
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void foreignCommandNamesAreSkipped(GameTestHelper h) throws IOException { // A8
+		MinecraftServer server = h.getLevel().getServer();
+		ConfigManager config = TownhallMod.CONFIG;
+		registerEscapeCommand(server);
+		TownhallConfig.Location clash = new TownhallConfig.Location();
+		clash.command = "list";
+		clash.dimension = "minecraft:the_nether";
+
+		// Startup: vanilla /list exists before the mod registers its roots.
+		CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+		dispatcher.register(Commands.literal("list").executes(ctx -> 1));
+		config.get().locations.put("a8test", clash);
+		try {
+			TownhallCommand.register(dispatcher);
+		} finally {
+			config.get().locations.remove("a8test");
+		}
+		h.assertTrue(dispatcher.getRoot().getChild("list").getChild("return") == null, "vanilla /list is not hijacked");
+		h.assertTrue(dispatcher.getRoot().getChild("townhall") != null, "other locations still get their command");
+
+		h.assertTrue(TownhallCommand.isForeignCommand(server, "list") && TownhallCommand.isForeignCommand(server, "escapetest"), "vanilla and other commands are foreign");
+		h.assertFalse(TownhallCommand.isForeignCommand(server, "townhall"), "our own roots are not foreign");
+
+		// Reload: a file that names /list is rejected.
+		config.save();
+		String good = Files.readString(config.path());
+		config.get().locations.put("a8test", clash);
+		config.save();
+		config.get().locations.remove("a8test");
+		Capture out = new Capture();
+		CommandSourceStack admin = server.createCommandSourceStack().withSource(out);
+		try {
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertFalse(config.get().locations.containsKey("a8test"), "reload with a vanilla command name is refused");
+			h.assertTrue(out.said("/list"), "admin is told which name: " + out.messages);
+			h.assertTrue(server.getCommands().getDispatcher().getRoot().getChild("list").getChild("return") == null, "live /list untouched");
+		} finally {
+			Files.writeString(config.path(), good);
+			out.messages.clear();
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+		}
+		h.assertTrue(out.said("reloaded") && !out.said("not reloaded"), "the fixed file loads: " + out.messages);
+		h.succeed();
+	}
+
+	@GameTest
+	public void escapableTrueFreesPrisoners(GameTestHelper h) { // A9
+		ServerPlayer p = playerOnFloor(h, new Vec3(4.5, 1, 4.5), 7f, 2f);
+		MinecraftServer server = h.getLevel().getServer();
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		Vec3 start = p.position();
+		Level home = p.level();
+		opAt(p, "gefaengnis send @s 5");
+		run(p, "townhall return");
+		h.assertTrue(atPrison(p), "confined: can't leave");
+		try {
+			console(server, "location set gefaengnis escapable true");
+			h.assertFalse(storage.state(p.getUUID()).confined(), "no longer confined");
+			h.assertTrue(storage.state(p.getUUID()).remainingMillis().orElse(0L) == 300_000L, "timer kept");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 7f, 2f);
+		} finally {
+			console(server, "location set gefaengnis escapable false");
+			storage.remove(p.getUUID());
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void percentInMessagesIsChecked(GameTestHelper h) { // A11
+		TownhallConfig file = new TownhallConfig();
+		file.messages.cooldown = "Warte %s Sekunden, %d";
+		file.messages.pulledBack = "Du bist zu 100% in %s";
+		file.messages.confined = null;
+		file.onboarding.reminder = null;
+		file.locations.get("townhall").alreadyHereMessage = "Schon 100% hier";
+		List<String> errors = file.validate();
+		for (String field : List.of("messages.cooldown", "messages.pulledBack", "messages.confined", "onboarding.reminder", "locations.townhall.alreadyHereMessage")) {
+			h.assertTrue(errors.stream().anyMatch(e -> e.startsWith(field)), field + " reported: " + errors);
+		}
+		h.assertTrue(errors.size() == 5, "only those: " + errors);
+
+		ServerPlayer admin = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		TownhallConfig.Location townhall = TownhallMod.CONFIG.get().location("townhall").orElseThrow();
+		String before = townhall.alreadyHereMessage;
+		try {
+			opAt(admin, "location set townhall alreadyHereMessage Schon 100% hier");
+			h.assertTrue(townhall.alreadyHereMessage.equals(before), "a lone % is rejected");
+			opAt(admin, "location set townhall alreadyHereMessage Schon 100%% hier, zurück mit /%s return");
+			h.assertTrue(townhall.alreadyHereMessage.equals("Schon 100%% hier, zurück mit /%s return"), "%% and %s are fine");
+		} finally {
+			townhall.alreadyHereMessage = before;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void adminOnlyReturnVisibleToSentPlayers(GameTestHelper h) { // A12
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 1.5), 15f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		Vec3 start = p.position();
+		Level home = p.level();
+		TownhallConfig.Location townhall = TownhallMod.CONFIG.get().location("townhall").orElseThrow();
+		boolean adminOnly = townhall.adminOnly;
+		townhall.adminOnly = true;
+		try {
+			h.assertFalse(usable(server, p.createCommandSourceStack(), "townhall return"), "adminOnly root hidden from players");
+			opAt(p, "townhall send @s");
+			h.assertTrue(inTownhall(p), "sent there by an operator");
+			h.assertTrue(usable(server, p.createCommandSourceStack(), "townhall return"), "the sent player sees return");
+			ServerPlayer other = h.makeMockServerPlayerInLevel();
+			h.assertFalse(usable(server, other.createCommandSourceStack(), "townhall"), "still hidden from everyone else");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 15f, 0f);
+			h.assertFalse(usable(server, p.createCommandSourceStack(), "townhall return"), "hidden again after returning");
+		} finally {
+			townhall.adminOnly = adminOnly;
+		}
+		h.succeed();
+	}
+
+	// ------------------------------------------------------------ 1.12.2: keys and build protection
+
+	private static final net.minecraft.world.level.block.state.BlockState OAK_DOOR = Blocks.OAK_DOOR.defaultBlockState();
+
+	private static void placeDoor(net.minecraft.server.level.ServerLevel level, BlockPos lower) {
+		level.setBlock(lower, OAK_DOOR, 3);
+		level.setBlock(lower.above(), OAK_DOOR.setValue(net.minecraft.world.level.block.DoorBlock.HALF, net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER), 3);
+	}
+
+	private static net.minecraft.world.InteractionResult useAt(ServerPlayer p, net.minecraft.server.level.ServerLevel level, BlockPos abs) {
+		var hit = new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(abs), net.minecraft.core.Direction.UP, abs, false);
+		return net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.invoker().interact(p, level, net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+	}
+
+	/** Full vanilla right-click (Fabric event, block use, then item use), like a real client packet. */
+	private static net.minecraft.world.InteractionResult rightClick(ServerPlayer p, net.minecraft.server.level.ServerLevel level, BlockPos abs) {
+		var hit = new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(abs), net.minecraft.core.Direction.UP, abs, false);
+		return p.gameMode.useItemOn(p, level, p.getMainHandItem(), net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+	}
+
+	private static boolean locked(net.minecraft.server.level.ServerLevel level, BlockPos lower) {
+		return dev.townhall.key.DoorLocks.get(level.getServer()).get(level.dimension(), lower).isPresent();
+	}
+
+	private static void lock(net.minecraft.server.level.ServerLevel level, BlockPos lower, net.minecraft.world.item.ItemStack key) {
+		dev.townhall.key.DoorLocks.get(level.getServer()).put(level.dimension(), lower,
+				new dev.townhall.key.DoorLocks.Lock(dev.townhall.key.Keys.keyId(key).orElseThrow().toString(), "Test", UUID.randomUUID().toString(), "Tester"));
+	}
+
+	@GameTest
+	public void lockingNeedsBuildRights(GameTestHelper h) { // B2
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer player = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		net.minecraft.server.level.ServerLevel end = server.getLevel(Level.END);
+		BlockPos base = new BlockPos(300, 70, 300), door = base.above();
+		dev.townhall.key.DoorLocks.get(server).remove(Level.END, door); // the test world persists; a failed earlier run may have left a lock
+		end.setBlock(base, Blocks.STONE.defaultBlockState(), 3);
+		placeDoor(end, door);
+		player.teleportTo(end, 301.5, 71, 300.5, java.util.Set.of(), 0f, 0f, true);
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.newKey("Fremd"));
+		console(server, "townhall worldrule minecraft:the_end build false");
+		try {
+			h.assertTrue(useAt(player, end, door) == net.minecraft.world.InteractionResult.PASS, "public door just opens");
+			h.assertFalse(locked(end, door), "no build rights: the key doesn't lock the door");
+		} finally {
+			console(server, "townhall worldrule minecraft:the_end build default");
+		}
+		try {
+			h.assertTrue(useAt(player, end, door).consumesAction(), "with build rights the key links the door");
+			h.assertTrue(locked(end, door), "door locked where the player may build");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(Level.END, door);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void lockedDoorKeepsItsSupport(GameTestHelper h) { // B3 a + hold
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer owner = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
+		ServerPlayer stranger = h.makeMockServerPlayerInLevel();
+		var level = h.getLevel();
+		BlockPos lockedDoor = h.absolutePos(new BlockPos(1, 1, 1)), openDoor = h.absolutePos(new BlockPos(5, 1, 1));
+		placeDoor(level, lockedDoor);
+		placeDoor(level, openDoor);
+		var key = dev.townhall.key.Keys.newKey("Stütze");
+		owner.getInventory().add(key.copy());
+		lock(level, lockedDoor, key);
+		try {
+			var breakEvent = net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.invoker();
+			BlockPos support = lockedDoor.below();
+			h.assertFalse(breakEvent.beforeBlockBreak(level, stranger, support, level.getBlockState(support), null), "no key: can't break the block under a locked door");
+			h.assertTrue(breakEvent.beforeBlockBreak(level, owner, support, level.getBlockState(support), null), "key owner may break it");
+			h.assertTrue(breakEvent.beforeBlockBreak(level, stranger, openDoor.below(), level.getBlockState(openDoor.below()), null), "block under an unlocked door: normal");
+
+			level.setBlock(support, Blocks.AIR.defaultBlockState(), 3);
+			h.assertTrue(level.getBlockState(lockedDoor).is(Blocks.OAK_DOOR) && level.getBlockState(lockedDoor.above()).is(Blocks.OAK_DOOR), "locked door stays without support");
+			h.assertTrue(locked(level, lockedDoor), "and stays locked");
+			level.setBlock(openDoor.below(), Blocks.AIR.defaultBlockState(), 3);
+			h.assertFalse(level.getBlockState(openDoor).is(Blocks.OAK_DOOR), "unlocked door pops without support (vanilla)");
+
+			// Pistons: a locked door blocks the piston, an unlocked one is destroyed as usual.
+			var dir = net.minecraft.core.Direction.EAST;
+			h.assertFalse(new net.minecraft.world.level.block.piston.PistonStructureResolver(level, lockedDoor.west(), dir, true).resolve(), "piston stays retracted");
+			placeDoor(level, openDoor);
+			level.setBlock(openDoor.below(), Blocks.STONE.defaultBlockState(), 3);
+			placeDoor(level, openDoor);
+			var resolver = new net.minecraft.world.level.block.piston.PistonStructureResolver(level, openDoor.west(), dir, true);
+			h.assertTrue(resolver.resolve() && resolver.getToDestroy().contains(openDoor), "piston destroys an unlocked door (vanilla)");
+
+			// Zombies on hard: BreakDoorGoal gives up on locked doors.
+			var zombie = net.minecraft.world.entity.EntityTypes.ZOMBIE.create(level, net.minecraft.world.entity.EntitySpawnReason.TRIGGERED);
+			var goal = new net.minecraft.world.entity.ai.goal.BreakDoorGoal(zombie, 240, d -> true);
+			var doorPos = net.minecraft.world.entity.ai.goal.DoorInteractGoal.class.getDeclaredField("doorPos");
+			var hasDoor = net.minecraft.world.entity.ai.goal.DoorInteractGoal.class.getDeclaredField("hasDoor");
+			doorPos.setAccessible(true);
+			hasDoor.setAccessible(true);
+			hasDoor.setBoolean(goal, true);
+			zombie.setPos(Vec3.atBottomCenterOf(lockedDoor.north()));
+			doorPos.set(goal, lockedDoor);
+			h.assertFalse(goal.canContinueToUse(), "zombie stops breaking a locked door");
+			zombie.setPos(Vec3.atBottomCenterOf(openDoor.north()));
+			doorPos.set(goal, openDoor);
+			h.assertTrue(goal.canContinueToUse(), "zombie keeps breaking an unlocked door (vanilla)");
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException(e);
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(level.dimension(), lockedDoor);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void explosionsSkipLockedDoorsAndLocksFollowTheDoor(GameTestHelper h) { // B3 c + d
+		MinecraftServer server = h.getLevel().getServer();
+		net.minecraft.server.level.ServerLevel end = server.getLevel(Level.END);
+		BlockPos base = new BlockPos(400, 70, 400), lockedDoor = base.above(), openDoor = base.offset(12, 1, 0), stale = base.offset(24, 1, 0);
+		for (int x = -3; x <= 27; x++) for (int z = -3; z <= 3; z++) end.setBlock(base.offset(x, 0, z), Blocks.STONE.defaultBlockState(), 3);
+		var key = dev.townhall.key.Keys.newKey("Bunker");
+		for (BlockPos p : List.of(lockedDoor, openDoor, stale)) dev.townhall.key.DoorLocks.get(server).remove(Level.END, p); // leftovers of failed runs
+		placeDoor(end, lockedDoor);
+		placeDoor(end, openDoor);
+		lock(end, lockedDoor, key);
+		try {
+			end.explode(null, lockedDoor.getX() + 0.5, lockedDoor.getY(), lockedDoor.getZ() - 0.5, 3f, Level.ExplosionInteraction.TNT);
+			h.assertTrue(end.getBlockState(lockedDoor).is(Blocks.OAK_DOOR) && end.getBlockState(lockedDoor.above()).is(Blocks.OAK_DOOR), "explosion leaves a locked door standing");
+			h.assertTrue(locked(end, lockedDoor), "still locked after the explosion");
+			end.explode(null, openDoor.getX() + 0.5, openDoor.getY(), openDoor.getZ() - 0.5, 3f, Level.ExplosionInteraction.TNT);
+			h.assertFalse(end.getBlockState(openDoor).is(Blocks.OAK_DOOR), "explosion destroys an unlocked door (vanilla)");
+
+			// A locked door removed with block updates (e.g. /setblock ... destroy): the lock goes with it.
+			end.setBlock(lockedDoor, Blocks.AIR.defaultBlockState(), 3);
+			h.assertFalse(locked(end, lockedDoor), "removed door: lock deleted");
+
+			// Removed without updates (flags like /setblock strict), then a new door on the same spot: no stale lock.
+			placeDoor(end, stale);
+			lock(end, stale, key);
+			end.setBlock(stale.above(), Blocks.AIR.defaultBlockState(), 2 | 16);
+			end.setBlock(stale, Blocks.AIR.defaultBlockState(), 2 | 16);
+			h.assertTrue(locked(end, stale), "no update: the entry is still stored");
+			placeDoor(end, stale);
+			h.assertFalse(locked(end, stale), "a new door doesn't inherit the old lock");
+			lock(end, stale, key);
+			end.setBlock(stale, end.getBlockState(stale).setValue(net.minecraft.world.level.block.DoorBlock.OPEN, true), 3);
+			h.assertTrue(locked(end, stale), "opening a door is not a new door: lock stays");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(Level.END, lockedDoor);
+			dev.townhall.key.DoorLocks.get(server).remove(Level.END, stale);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void reloadEndsCreativeOfRemovedBuilders(GameTestHelper h) { // B7
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer builder = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		net.minecraft.server.level.ServerLevel nether = server.getLevel(Level.NETHER);
+		builder.teleportTo(nether, 70.5, 80, 70.5, java.util.Set.of(), 0f, 0f, true);
+		CommandSourceStack asBuilder = server.createCommandSourceStack().withEntity(builder).withLevel(nether)
+				.withPermission(net.minecraft.server.permissions.PermissionSet.NO_PERMISSIONS);
+		String id = builder.getUUID().toString();
+		try {
+			opAt(builder, "builder add minecraft:the_nether @p[distance=..0.5]");
+			server.getCommands().performPrefixedCommand(asBuilder, "builder creative");
+			h.assertTrue(builder.entityTags().contains(Protection.BUILDER_CREATIVE_TAG), "builder in creative");
+			console(server, "townhall reload");
+			h.assertTrue(builder.entityTags().contains(Protection.BUILDER_CREATIVE_TAG), "still a builder after reload: creative stays");
+
+			// Someone removes the builder in config/townhall.json, then /townhall reload.
+			TownhallConfig.DimensionRules rules = TownhallMod.CONFIG.get().dimensions.get("minecraft:the_nether");
+			String name = rules.builders.remove(id);
+			TownhallMod.CONFIG.save();
+			rules.builders.put(id, name);
+			DimensionSettings.rebuild(TownhallMod.CONFIG.get());
+			console(server, "townhall reload");
+			h.assertFalse(Protection.isBuilderHere(builder), "no builder after reload");
+			h.assertFalse(builder.entityTags().contains(Protection.BUILDER_CREATIVE_TAG), "reload puts the removed builder back to survival");
+		} finally {
+			TownhallConfig.DimensionRules rules = TownhallMod.CONFIG.get().dimensions.get("minecraft:the_nether");
+			if (rules != null && rules.builders != null) {
+				rules.builders.remove(id);
+				if (rules.builders.isEmpty()) rules.builders = null;
+			}
+			TownhallMod.CONFIG.save();
+			DimensionSettings.rebuild(TownhallMod.CONFIG.get());
+			builder.removeTag(Protection.BUILDER_CREATIVE_TAG);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void buildFalseProtectsSignsPotsAndProjectiles(GameTestHelper h) throws ReflectiveOperationException { // B11
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer player = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		net.minecraft.server.level.ServerLevel end = server.getLevel(Level.END);
+		BlockPos base = new BlockPos(500, 70, 500);
+		BlockPos sign = base.offset(0, 1, 0), pot = base.offset(2, 1, 0), repeater = base.offset(4, 1, 0), note = base.offset(6, 1, 0),
+				pumpkin = base.offset(8, 1, 0), chest = base.offset(10, 1, 0), decorated = base.offset(12, 1, 0);
+		Runnable build = () -> {
+			for (int x = -2; x <= 14; x++) for (int z = -2; z <= 2; z++) end.setBlock(base.offset(x, 0, z), Blocks.STONE.defaultBlockState(), 3);
+			end.setBlock(sign, Blocks.OAK_SIGN.defaultBlockState(), 3);
+			end.setBlock(pot, Blocks.POTTED_POPPY.defaultBlockState(), 3);
+			end.setBlock(repeater, Blocks.REPEATER.defaultBlockState(), 3);
+			end.setBlock(note, Blocks.NOTE_BLOCK.defaultBlockState(), 3);
+			end.setBlock(pumpkin, Blocks.PUMPKIN.defaultBlockState(), 3);
+			end.setBlock(chest, Blocks.CHEST.defaultBlockState(), 3);
+			end.setBlock(decorated, Blocks.DECORATED_POT.defaultBlockState(), 3);
+		};
+		build.run();
+		player.teleportTo(end, 505.5, 71, 502.5, java.util.Set.of(), 0f, 0f, true);
+		var frame = new net.minecraft.world.entity.decoration.ItemFrame(end, base.offset(14, 1, 0), net.minecraft.core.Direction.UP);
+		frame.setItem(new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND));
+		end.addFreshEntity(frame);
+		var onHit = net.minecraft.world.entity.projectile.Projectile.class.getDeclaredMethod("onHit", net.minecraft.world.phys.HitResult.class);
+		onHit.setAccessible(true);
+		java.util.function.Supplier<net.minecraft.world.entity.projectile.arrow.Arrow> arrow = () -> {
+			var a = new net.minecraft.world.entity.projectile.arrow.Arrow(end, player, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.ARROW), null);
+			a.setDeltaMovement(0, -2, 0);
+			return a;
+		};
+		var hitPot = new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(decorated), net.minecraft.core.Direction.UP, decorated, false);
+		console(server, "townhall worldrule minecraft:the_end build false");
+		try {
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.ItemStack.EMPTY);
+			for (BlockPos pos : List.of(sign, pot, repeater, note)) {
+				h.assertTrue(useAt(player, end, pos) == net.minecraft.world.InteractionResult.FAIL, "empty hand can't change " + end.getBlockState(pos));
+			}
+			h.assertTrue(useAt(player, end, chest) == net.minecraft.world.InteractionResult.PASS, "chests stay usable");
+			for (var item : List.of(net.minecraft.world.item.Items.DYE.red(), net.minecraft.world.item.Items.GLOW_INK_SAC, net.minecraft.world.item.Items.HONEYCOMB,
+					net.minecraft.world.item.Items.SHEARS, net.minecraft.world.item.Items.BRUSH, net.minecraft.world.item.Items.ENDER_EYE, net.minecraft.world.item.Items.POTION)) {
+				player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new net.minecraft.world.item.ItemStack(item));
+				h.assertTrue(useAt(player, end, pumpkin) == net.minecraft.world.InteractionResult.FAIL, item + " is denied on blocks");
+			}
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SHEARS));
+			rightClick(player, end, pumpkin);
+			h.assertTrue(end.getBlockState(pumpkin).is(Blocks.PUMPKIN), "pumpkin not carved");
+
+			onHit.invoke(arrow.get(), new net.minecraft.world.phys.EntityHitResult(frame));
+			h.assertFalse(frame.isRemoved() || frame.getItem().isEmpty(), "arrow doesn't break the item frame");
+			onHit.invoke(arrow.get(), hitPot);
+			h.assertTrue(end.getBlockState(decorated).is(Blocks.DECORATED_POT), "arrow doesn't break the decorated pot");
+		} finally {
+			console(server, "townhall worldrule minecraft:the_end build default");
+		}
+		// Positive controls with the rule back to normal.
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.ItemStack.EMPTY);
+		h.assertTrue(useAt(player, end, sign) == net.minecraft.world.InteractionResult.PASS, "signs editable again");
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SHEARS));
+		rightClick(player, end, pumpkin);
+		h.assertTrue(end.getBlockState(pumpkin).is(Blocks.CARVED_PUMPKIN), "shears carve the pumpkin again");
+		onHit.invoke(arrow.get(), new net.minecraft.world.phys.EntityHitResult(frame));
+		h.assertTrue(frame.isRemoved() || frame.getItem().isEmpty(), "arrow hits the item frame again");
+		onHit.invoke(arrow.get(), hitPot);
+		h.assertFalse(end.getBlockState(decorated).is(Blocks.DECORATED_POT), "arrow breaks the decorated pot again");
+		frame.discard();
+		h.succeed();
+	}
+
+	@GameTest
+	public void buildFalseKeepsBlocksUsableWithToolsInHand(GameTestHelper h) { // B12
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer player = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		net.minecraft.server.level.ServerLevel end = server.getLevel(Level.END);
+		BlockPos base = new BlockPos(600, 70, 600), chest = base.above(), door = base.offset(2, 1, 0), log = base.offset(4, 1, 0);
+		for (int x = -2; x <= 6; x++) for (int z = -2; z <= 2; z++) end.setBlock(base.offset(x, 0, z), Blocks.STONE.defaultBlockState(), 3);
+		end.setBlock(chest, Blocks.CHEST.defaultBlockState(), 3);
+		placeDoor(end, door);
+		end.setBlock(log, Blocks.OAK_LOG.defaultBlockState(), 3);
+		player.teleportTo(end, 602.5, 71, 602.5, java.util.Set.of(), 0f, 0f, true);
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_AXE));
+		console(server, "townhall worldrule minecraft:the_end build false");
+		try {
+			rightClick(player, end, chest);
+			h.assertTrue(player.containerMenu instanceof net.minecraft.world.inventory.ChestMenu, "axe in hand: chest still opens");
+			player.closeContainer();
+			rightClick(player, end, door);
+			h.assertTrue(end.getBlockState(door).getValue(net.minecraft.world.level.block.DoorBlock.OPEN), "axe in hand: door still opens");
+			h.assertTrue(rightClick(player, end, log) == net.minecraft.world.InteractionResult.FAIL, "axe on a log is denied");
+			h.assertTrue(end.getBlockState(log).is(Blocks.OAK_LOG), "log not stripped");
+			player.setShiftKeyDown(true);
+			h.assertTrue(useAt(player, end, chest) == net.minecraft.world.InteractionResult.FAIL, "sneaking skips the chest: the axe rule applies");
+			player.setShiftKeyDown(false);
+		} finally {
+			console(server, "townhall worldrule minecraft:the_end build default");
+			player.closeContainer();
+		}
+		rightClick(player, end, log);
+		h.assertTrue(end.getBlockState(log).is(Blocks.STRIPPED_OAK_LOG), "axe strips logs again after default");
+		h.succeed();
+	}
+
+	@GameTest
+	public void keysHaveCooldownAndDontCraft(GameTestHelper h) { // B14
+		MinecraftServer server = h.getLevel().getServer();
+		ServerPlayer player = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		java.util.function.IntSupplier keys = () -> {
+			int n = 0;
+			for (int i = 0; i < player.getInventory().getContainerSize(); i++) if (dev.townhall.key.Keys.keyId(player.getInventory().getItem(i)).isPresent()) n += player.getInventory().getItem(i).getCount();
+			return n;
+		};
+		run(player, "key new Eins");
+		run(player, "key new Zwei");
+		h.assertTrue(keys.getAsInt() == 1, "second /key new within 10 s is refused (had " + keys.getAsInt() + ")");
+		h.assertTrue(dev.townhall.key.Keys.keyId(player.getMainHandItem()).isPresent(), "the new key is in the main hand");
+		run(player, "key copy");
+		run(player, "key copy");
+		h.assertTrue(keys.getAsInt() == 2, "one copy, the second within 10 s is refused (had " + keys.getAsInt() + ")");
+		opAt(player, "key new Drei");
+		h.assertTrue(keys.getAsInt() == 3, "operators have no cooldown");
+
+		var key = dev.townhall.key.Keys.newKey("Kiste");
+		var chest = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.CHEST);
+		var hook = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.TRIPWIRE_HOOK);
+		var e = net.minecraft.world.item.ItemStack.EMPTY;
+		h.assertTrue(net.minecraft.world.level.block.CrafterBlock.getPotentialResults(h.getLevel(), net.minecraft.world.item.crafting.CraftingInput.of(2, 1, List.of(chest, key))).isEmpty(), "crafter: key + chest gives nothing");
+		h.assertTrue(net.minecraft.world.level.block.CrafterBlock.getPotentialResults(h.getLevel(), net.minecraft.world.item.crafting.CraftingInput.of(2, 1, List.of(chest, hook))).isPresent(), "crafter: tripwire hook + chest = trapped chest");
+		var menu = new net.minecraft.world.inventory.CraftingMenu(1, player.getInventory(), net.minecraft.world.inventory.ContainerLevelAccess.create(h.getLevel(), h.absolutePos(BlockPos.ZERO)));
+		menu.getSlot(1).set(chest.copy());
+		menu.getSlot(2).set(key.copy());
+		h.assertTrue(menu.getSlot(0).getItem().isEmpty(), "crafting table: key + chest gives nothing");
+		menu.getSlot(2).set(hook.copy());
+		h.assertTrue(menu.getSlot(0).getItem().is(net.minecraft.world.item.Items.TRAPPED_CHEST), "crafting table: tripwire hook + chest = trapped chest");
 		h.succeed();
 	}
 

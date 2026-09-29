@@ -14,6 +14,27 @@ Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbeh
 - Fix: Nach einer Namensänderung bei Mojang konnte ein anderer Spieler falsche Punkte in der Tab-Liste bekommen.
 - Die Tab-Liste liest Nicknamen schneller.
 
+## 1.12.2
+- Fix: Türen abschließen geht nur noch dort, wo man bauen darf. Fremde öffentliche Türen in Welten mit `build false` bleiben offen.
+- Fix: Abgeschlossene Türen lassen sich nicht mehr umgehen: Block darunter abbauen, Kolben, Explosionen und Zombies zerstören sie nicht. Eine neue Tür erbt kein altes Schloss.
+- Fix: `/townhall reload` nimmt entfernten Bauern sofort Creative weg.
+- Fix: `build false` schützt jetzt auch Schilder, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke, Tageslichtsensoren, Farbstoff, Scheren, Pinsel und Ähnliches, und Pfeile anderer Spieler zerstören keine Rahmen, Bilder oder Krüge mehr.
+- Fix: Mit Werkzeug oder Eimer in der Hand lassen sich Türen, Kisten und Knöpfe in `build false`-Welten wieder benutzen.
+- Fix: Bauer dürfen keine CraftScripts, kein `setnbt` und kein Schematic-Löschen in WorldEdit.
+- Fix: `/key new` und `/key copy` haben 10 Sekunden Wartezeit, und Schlüssel lassen sich nicht mehr verbauen (Fallenkiste, Armbrust).
+
+## 1.12.1
+- Fix: Befehle auf Schildern laufen mit den Rechten des Spielers. Ein Schild mit `/townhall return` holt keine Gefangenen mehr heraus, öffnet keine Admin-Orte und umgeht weder Wartezeit noch die Befehlssperre.
+- Fix: Ist `config/townhall.json` fehlerhaft (beim Start oder nach `/townhall reload`), überschreiben Befehle die Datei nicht mehr, sondern melden „Config not saved“. Schreibfehler werden ebenfalls gemeldet statt „gespeichert“.
+- Fix: `/townhall reload` lehnt eine Datei ab, in der ein Ort mit Gefangenen fehlt, und Befehlsnamen, die schon Minecraft oder eine andere Mod benutzt (etwa `/list`). Beim Start bekommt so ein Ort keinen Befehl mehr, statt den fremden zu kapern.
+- Fix: Onboarding aus oder Regelversion gesenkt: wartende Spieler sind sofort frei. `/rules accept` beendet das Warten immer.
+- Fix: Wer die Regeln noch nicht akzeptiert hat und ins Gefängnis geschickt wird, springt nicht mehr jede Sekunde zwischen Gefängnis und Join-Stelle hin und her.
+- Fix: Orte in der Oberwelt oder der Notfall-Welt werden abgelehnt (`/location create`, `setspawn`, `set dimension`). Steht so ein Ort schon in der Config, lädt sie trotzdem; das Log warnt.
+- Fix: Wird ein Ort in eine andere Welt verlegt, behalten Besucher ihre gespeicherte Rückkehrstelle.
+- Fix: `/location set <ort> escapable true` lässt alle frei, die dort gerade eingesperrt sind.
+- Fix: Ein einzelnes `%` in Texten (z. B. `alreadyHereMessage`) führt nicht mehr zu Fehlern. Die Config und `/location set` prüfen die Platzhalter; ein Prozentzeichen schreibt man als `%%`. Fehlende Texte in der Config werden gemeldet.
+- Fix: Wer von einem Admin an einen Ort mit `adminOnly` geschickt wurde, sieht dort `/<ort> return`.
+
 ## 1.12.0
 - Neue Welt-Regeln: `mobs`, `fire`, `explosions`, `leafDecay` (`/townhall worldrule <welt> <regel> false`).
 
