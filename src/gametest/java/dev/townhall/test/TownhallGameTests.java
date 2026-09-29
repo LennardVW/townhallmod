@@ -15,7 +15,12 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.commands.Commands;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.ParseResults;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.world.phys.Vec2;
 import dev.townhall.storage.ReturnPositionStorage;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -31,6 +36,7 @@ import net.minecraft.world.phys.Vec3;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -600,6 +606,7 @@ public class TownhallGameTests {
 	public void locationsAreManagedByCommands(GameTestHelper h) {
 		ServerPlayer admin = playerOnFloor(h, new Vec3(2.5, 1, 4.5), 45f, 0f);
 		MinecraftServer server = h.getLevel().getServer();
+		admin.teleportTo(server.getLevel(Level.NETHER), 80.5, 80, 80.5, java.util.Set.of(), 45f, 0f, true); // locations need a world of their own
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		CommandSourceStack player = server.createCommandSourceStack().withEntity(admin).withPermission(net.minecraft.server.permissions.PermissionSet.NO_PERMISSIONS);
 		try {
@@ -964,6 +971,439 @@ public class TownhallGameTests {
 		h.assertFalse(end.getBlockState(leaves).is(net.minecraft.world.level.block.Blocks.OAK_LEAVES), "leaves decay again");
 		end.explode(null, tnt.getX() + 0.5, tnt.getY(), tnt.getZ() + 0.5, 3f, Level.ExplosionInteraction.TNT);
 		h.assertFalse(end.getBlockState(tnt.below()).is(net.minecraft.world.level.block.Blocks.STONE), "explosions break blocks again");
+		h.succeed();
+	}
+
+	// ------------------------------------------------------------ 1.12.1 fixes (bug ids from the review)
+
+	/** Collects what a command tells its sender, so tests can check success and failure texts. */
+	private static final class Capture implements CommandSource {
+		final List<String> messages = new ArrayList<>();
+
+		@Override
+		public void sendSystemMessage(Component message) {
+			messages.add(message.getString());
+		}
+
+		@Override
+		public boolean acceptsSuccess() {
+			return true;
+		}
+
+		@Override
+		public boolean acceptsFailure() {
+			return true;
+		}
+
+		@Override
+		public boolean shouldInformAdmins() {
+			return false;
+		}
+
+		boolean said(String part) {
+			return messages.stream().anyMatch(m -> m.toLowerCase(java.util.Locale.ROOT).contains(part.toLowerCase(java.util.Locale.ROOT)));
+		}
+	}
+
+	/** Exactly what a sign click command gets: no real sender, the player as entity, GAMEMASTER permissions. */
+	private static void clickSign(ServerPlayer p, String command) {
+		MinecraftServer server = p.level().getServer();
+		CommandSourceStack sign = new CommandSourceStack(CommandSource.NULL, p.position(), Vec2.ZERO, (ServerLevel) p.level(),
+				LevelBasedPermissionSet.GAMEMASTER, server, p);
+		server.getCommands().performPrefixedCommand(sign, command);
+	}
+
+	@GameTest
+	public void signCommandsUsePlayersOwnRights(GameTestHelper h) { // A1
+		ServerPlayer p = playerOnFloor(h, new Vec3(1.5, 1, 1.5), 0f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		registerEscapeCommand(server);
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+
+		clickSign(p, "townhall");
+		h.assertTrue(inTownhall(p), "a /townhall sign works for normal players");
+		clickSign(p, "townhall return");
+		h.assertFalse(inTownhall(p), "a return sign works for free players");
+
+		clickSign(p, "gefaengnis");
+		h.assertFalse(atPrison(p), "a sign doesn't open an adminOnly location to players");
+		h.assertTrue(storage.state(p.getUUID()).isEmpty(), "nothing stored");
+
+		TownhallMod.CONFIG.get().commands.cooldownSeconds = 3;
+		try {
+			clickSign(p, "townhall");
+			h.assertTrue(inTownhall(p), "sign after the cooldown works");
+			clickSign(p, "townhall return");
+			h.assertTrue(inTownhall(p), "the sign doesn't skip the player's cooldown");
+		} finally {
+			TownhallMod.CONFIG.get().commands.cooldownSeconds = 0;
+		}
+		run(p, "townhall return");
+
+		opAt(p, "gefaengnis send @s");
+		h.assertTrue(atPrison(p) && storage.state(p.getUUID()).confined(), "confined");
+		int before = escapeCount;
+		clickSign(p, "escapetest");
+		h.assertTrue(escapeCount == before, "a sign doesn't bypass the prison's command whitelist");
+		clickSign(p, "townhall return");
+		h.assertTrue(atPrison(p) && storage.state(p.getUUID()).confined(), "a return sign doesn't release a prisoner");
+		opAt(p, "gefaengnis return @s");
+		h.assertTrue(storage.state(p.getUUID()).isEmpty(), "the console acting through the player still releases (op helper keeps working)");
+		h.succeed();
+	}
+
+	@GameTest
+	public void brokenConfigFileIsNeverOverwritten(GameTestHelper h) throws IOException { // A2 (ConfigManager)
+		Path dir = Files.createTempDirectory("townhall-save");
+		ConfigManager defaults = new ConfigManager(dir.resolve("defaults.json"));
+		defaults.loadOrCreate();
+		String valid = Files.readString(dir.resolve("defaults.json"));
+
+		Path file = dir.resolve("townhall.json");
+		Files.writeString(file, "{ \"locations\": { broken");
+		ConfigManager manager = new ConfigManager(file);
+		manager.loadOrCreate(); // defaults in memory
+		manager.get().afkMinutes = 42;
+		manager.save();
+		h.assertTrue(Files.readString(file).equals("{ \"locations\": { broken"), "defaults don't overwrite the admin's broken file");
+
+		Files.writeString(file, valid);
+		h.assertTrue(manager.reload().isEmpty(), "fixed file loads");
+		manager.get().afkMinutes = 42;
+		manager.save();
+		h.assertTrue(Files.readString(file).contains("\"afkMinutes\": 42"), "saving works again after a successful reload");
+
+		Files.writeString(file, "{ \"afkMinutes\": \"oops\" ");
+		h.assertFalse(manager.reload().isEmpty(), "broken again");
+		manager.save();
+		h.assertTrue(Files.readString(file).equals("{ \"afkMinutes\": \"oops\" "), "a failed reload also pauses saving");
+		h.succeed();
+	}
+
+	@GameTest
+	public void saveReportsWriteErrors(GameTestHelper h) throws IOException { // A2 (IO errors)
+		Path dir = Files.createTempDirectory("townhall-io");
+		Path blocker = dir.resolve("not-a-folder");
+		Files.writeString(blocker, "x");
+		ConfigManager manager = new ConfigManager(blocker.resolve("townhall.json")); // parent is a file: can't be written
+		manager.loadOrCreate();
+		h.assertFalse(manager.save(), "save reports a write error");
+		ConfigManager ok = new ConfigManager(dir.resolve("townhall.json"));
+		ok.loadOrCreate();
+		h.assertTrue(ok.save(), "save reports success");
+		h.succeed();
+	}
+
+	@GameTest
+	public void commandsReportUnsavedConfig(GameTestHelper h) throws IOException { // A2 (commands)
+		MinecraftServer server = h.getLevel().getServer();
+		ConfigManager config = TownhallMod.CONFIG;
+		config.save();
+		String good = Files.readString(config.path());
+		int afk = config.get().afkMinutes;
+		Capture out = new Capture();
+		CommandSourceStack admin = server.createCommandSourceStack().withSource(out);
+		try {
+			Files.writeString(config.path(), "{ broken by the admin");
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertTrue(out.said("Config not reloaded"), "reload fails: " + out.messages);
+			out.messages.clear();
+			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
+			h.assertTrue(Files.readString(config.path()).equals("{ broken by the admin"), "the admin's file is not overwritten");
+			h.assertTrue(out.said("not saved"), "the admin is told it wasn't saved: " + out.messages);
+			h.assertFalse(out.said("Players are AFK after"), "no success message: " + out.messages);
+		} finally {
+			Files.writeString(config.path(), good);
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+		}
+		h.assertTrue(config.get().afkMinutes == afk, "reload restored the file's value");
+		out.messages.clear();
+		server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
+		try {
+			h.assertTrue(Files.readString(config.path()).contains("\"afkMinutes\": " + (afk + 1)), "saved again after a working reload");
+			h.assertFalse(out.said("not saved"), "no warning when saved: " + out.messages);
+		} finally {
+			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + afk);
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void reloadKeepsLocationWithPrisoners(GameTestHelper h) throws IOException { // A3
+		MinecraftServer server = h.getLevel().getServer();
+		ConfigManager config = TownhallMod.CONFIG;
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		config.save(); // the file has no a3test ...
+		String good = Files.readString(config.path());
+		TownhallConfig.Location removed = new TownhallConfig.Location();
+		removed.command = "a3test";
+		removed.dimension = "minecraft:the_nether";
+		config.get().locations.put("a3test", removed); // ... the active config has it, like after editing the file
+		UUID prisoner = UUID.randomUUID();
+		storage.set(prisoner, PlayerState.EMPTY.withStay("a3test", true, Optional.empty()));
+		Capture out = new Capture();
+		CommandSourceStack admin = server.createCommandSourceStack().withSource(out);
+		try {
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertTrue(config.get().locations.containsKey("a3test"), "reload refused: the location still holds a prisoner");
+			h.assertTrue(out.said("a3test") && out.said("Config not reloaded"), "admin is told why: " + out.messages);
+
+			storage.remove(prisoner);
+			out.messages.clear();
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertFalse(config.get().locations.containsKey("a3test"), "without prisoners the location can be removed: " + out.messages);
+		} finally {
+			storage.remove(prisoner);
+			config.get().locations.remove("a3test");
+			Files.writeString(config.path(), good);
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void onboardingOffFreesPendingPlayers(GameTestHelper h) { // A4
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig.Onboarding cfg = TownhallMod.CONFIG.get().onboarding;
+		int version = cfg.rulesVersion;
+		cfg.enabled = true;
+		try {
+			ServerPlayer p = h.makeMockServerPlayerInLevel();
+			h.assertTrue(Onboarding.isRestricted(p), "pending after joining");
+			cfg.enabled = false;
+			h.assertFalse(Onboarding.isRestricted(p), "turning onboarding off frees pending players");
+			cfg.enabled = true;
+			h.assertTrue(Onboarding.isRestricted(p), "on again: restricted again");
+
+			cfg.rulesVersion = 0;
+			h.assertFalse(Onboarding.isRestricted(p), "nothing to accept after lowering rulesVersion");
+			run(p, "rules accept");
+			cfg.rulesVersion = version;
+			h.assertFalse(Onboarding.isRestricted(p), "accept always ends the pending state");
+
+			ServerPlayer q = h.makeMockServerPlayerInLevel();
+			h.assertTrue(Onboarding.isRestricted(q), "second player pending");
+			Vec3 joined = q.position();
+			cfg.enabled = false;
+			q.absSnapTo(joined.x + 10, joined.y, joined.z, 0f, 0f);
+			Onboarding.check(server);
+			h.assertTrue(q.position().distanceTo(joined) > 5, "no pull-back once onboarding is off");
+		} finally {
+			cfg.rulesVersion = version;
+			cfg.enabled = false;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void pendingPlayerSentToPrisonStaysThere(GameTestHelper h) { // A5
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig.Onboarding cfg = TownhallMod.CONFIG.get().onboarding;
+		TownhallMod.CONFIG.get().locations.values().forEach(l -> l.dimension = "minecraft:the_nether");
+		cfg.enabled = true;
+		ServerPlayer p = h.makeMockServerPlayerInLevel();
+		try {
+			h.assertTrue(Onboarding.isRestricted(p), "hasn't accepted the rules");
+			opAt(p, "gefaengnis send @s");
+			h.assertTrue(atPrison(p), "sent to prison");
+			Onboarding.check(server);
+			h.assertTrue(atPrison(p), "onboarding doesn't pull them back to where they joined");
+			ConfinementService.check(server, 0);
+			Onboarding.check(server);
+			h.assertTrue(atPrison(p), "no ping-pong between prison and join spot");
+
+			TownhallConfig.Spot s = prisonSpawn();
+			p.absSnapTo(s.x + 10, s.y, s.z, 0f, 0f);
+			Onboarding.check(server);
+			h.assertTrue(atPrison(p), "still held until they accept, now at the prison");
+		} finally {
+			opAt(p, "gefaengnis return @s");
+			cfg.enabled = false;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void noLocationsInSharedWorlds(GameTestHelper h) { // A6
+		ServerPlayer admin = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig config = TownhallMod.CONFIG.get();
+		try {
+			opAt(admin, "location create a6test");
+			h.assertFalse(config.locations.containsKey("a6test"), "no location in the overworld");
+
+			admin.teleportTo(server.getLevel(Level.NETHER), 70.5, 80, 70.5, java.util.Set.of(), 0f, 0f, true);
+			opAt(admin, "location create a6test");
+			TownhallConfig.Location l = config.locations.get("a6test");
+			h.assertTrue(l != null && l.dimension.equals("minecraft:the_nether"), "a world of its own works");
+
+			Vec3 overworld = h.absoluteVec(new Vec3(2.5, 1, 2.5));
+			admin.teleportTo(h.getLevel(), overworld.x, overworld.y, overworld.z, java.util.Set.of(), 0f, 0f, true);
+			opAt(admin, "location setspawn a6test");
+			h.assertTrue(l.dimension.equals("minecraft:the_nether"), "setspawn refuses the overworld");
+			opAt(admin, "location set a6test dimension minecraft:overworld");
+			h.assertTrue(l.dimension.equals("minecraft:the_nether"), "set dimension refuses the overworld");
+			opAt(admin, "location set a6test dimension minecraft:the_end");
+			h.assertTrue(l.dimension.equals("minecraft:the_end"), "set dimension to another own world works");
+
+			TownhallConfig file = new TownhallConfig();
+			h.assertTrue(file.validate().isEmpty(), "default config is valid");
+			file.locations.get("townhall").dimension = "minecraft:overworld";
+			h.assertTrue(file.validate().isEmpty(), "an existing config with a location in the overworld still loads (only a log warning)");
+		} finally {
+			config.locations.remove("a6test");
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void movedLocationKeepsReturnPosition(GameTestHelper h) { // A7
+		ServerPlayer p = playerOnFloor(h, new Vec3(1.5, 1, 3.5), 21f, 3f);
+		MinecraftServer server = h.getLevel().getServer();
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		Vec3 start = p.position();
+		Level home = p.level();
+		TownhallConfig config = TownhallMod.CONFIG.get();
+		run(p, "townhall");
+		h.assertTrue(inTownhall(p), "in the Townhall (Nether)");
+		config.locations.values().forEach(l -> l.dimension = "minecraft:the_end"); // an admin moves the locations to another world
+		try {
+			run(p, "townhall");
+			h.assertTrue(p.level().dimension().equals(Level.END), "went to the moved Townhall");
+			h.assertTrue(storage.get(p.getUUID()).orElseThrow().dimension().equals(home.dimension()), "original return position kept");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 21f, 3f);
+
+			// Control: someone standing in the old world (no location there anymore) does get that spot saved.
+			p.teleportTo(server.getLevel(Level.NETHER), 30.5, 80, 30.5, java.util.Set.of(), 0f, 0f, true);
+			run(p, "townhall");
+			h.assertTrue(storage.get(p.getUUID()).orElseThrow().dimension().equals(Level.NETHER), "return position saved when coming from a normal world");
+		} finally {
+			config.locations.values().forEach(l -> l.dimension = "minecraft:the_nether");
+			storage.remove(p.getUUID());
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void foreignCommandNamesAreSkipped(GameTestHelper h) throws IOException { // A8
+		MinecraftServer server = h.getLevel().getServer();
+		ConfigManager config = TownhallMod.CONFIG;
+		registerEscapeCommand(server);
+		TownhallConfig.Location clash = new TownhallConfig.Location();
+		clash.command = "list";
+		clash.dimension = "minecraft:the_nether";
+
+		// Startup: vanilla /list exists before the mod registers its roots.
+		CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+		dispatcher.register(Commands.literal("list").executes(ctx -> 1));
+		config.get().locations.put("a8test", clash);
+		try {
+			TownhallCommand.register(dispatcher);
+		} finally {
+			config.get().locations.remove("a8test");
+		}
+		h.assertTrue(dispatcher.getRoot().getChild("list").getChild("return") == null, "vanilla /list is not hijacked");
+		h.assertTrue(dispatcher.getRoot().getChild("townhall") != null, "other locations still get their command");
+
+		h.assertTrue(TownhallCommand.isForeignCommand(server, "list") && TownhallCommand.isForeignCommand(server, "escapetest"), "vanilla and other commands are foreign");
+		h.assertFalse(TownhallCommand.isForeignCommand(server, "townhall"), "our own roots are not foreign");
+
+		// Reload: a file that names /list is rejected.
+		config.save();
+		String good = Files.readString(config.path());
+		config.get().locations.put("a8test", clash);
+		config.save();
+		config.get().locations.remove("a8test");
+		Capture out = new Capture();
+		CommandSourceStack admin = server.createCommandSourceStack().withSource(out);
+		try {
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+			h.assertFalse(config.get().locations.containsKey("a8test"), "reload with a vanilla command name is refused");
+			h.assertTrue(out.said("/list"), "admin is told which name: " + out.messages);
+			h.assertTrue(server.getCommands().getDispatcher().getRoot().getChild("list").getChild("return") == null, "live /list untouched");
+		} finally {
+			Files.writeString(config.path(), good);
+			out.messages.clear();
+			server.getCommands().performPrefixedCommand(admin, "townhall reload");
+		}
+		h.assertTrue(out.said("reloaded") && !out.said("not reloaded"), "the fixed file loads: " + out.messages);
+		h.succeed();
+	}
+
+	@GameTest
+	public void escapableTrueFreesPrisoners(GameTestHelper h) { // A9
+		ServerPlayer p = playerOnFloor(h, new Vec3(4.5, 1, 4.5), 7f, 2f);
+		MinecraftServer server = h.getLevel().getServer();
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		Vec3 start = p.position();
+		Level home = p.level();
+		opAt(p, "gefaengnis send @s 5");
+		run(p, "townhall return");
+		h.assertTrue(atPrison(p), "confined: can't leave");
+		try {
+			console(server, "location set gefaengnis escapable true");
+			h.assertFalse(storage.state(p.getUUID()).confined(), "no longer confined");
+			h.assertTrue(storage.state(p.getUUID()).remainingMillis().orElse(0L) == 300_000L, "timer kept");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 7f, 2f);
+		} finally {
+			console(server, "location set gefaengnis escapable false");
+			storage.remove(p.getUUID());
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void percentInMessagesIsChecked(GameTestHelper h) { // A11
+		TownhallConfig file = new TownhallConfig();
+		file.messages.cooldown = "Warte %s Sekunden, %d";
+		file.messages.pulledBack = "Du bist zu 100% in %s";
+		file.messages.confined = null;
+		file.onboarding.reminder = null;
+		file.locations.get("townhall").alreadyHereMessage = "Schon 100% hier";
+		List<String> errors = file.validate();
+		for (String field : List.of("messages.cooldown", "messages.pulledBack", "messages.confined", "onboarding.reminder", "locations.townhall.alreadyHereMessage")) {
+			h.assertTrue(errors.stream().anyMatch(e -> e.startsWith(field)), field + " reported: " + errors);
+		}
+		h.assertTrue(errors.size() == 5, "only those: " + errors);
+
+		ServerPlayer admin = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		TownhallConfig.Location townhall = TownhallMod.CONFIG.get().location("townhall").orElseThrow();
+		String before = townhall.alreadyHereMessage;
+		try {
+			opAt(admin, "location set townhall alreadyHereMessage Schon 100% hier");
+			h.assertTrue(townhall.alreadyHereMessage.equals(before), "a lone % is rejected");
+			opAt(admin, "location set townhall alreadyHereMessage Schon 100%% hier, zurück mit /%s return");
+			h.assertTrue(townhall.alreadyHereMessage.equals("Schon 100%% hier, zurück mit /%s return"), "%% and %s are fine");
+		} finally {
+			townhall.alreadyHereMessage = before;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void adminOnlyReturnVisibleToSentPlayers(GameTestHelper h) { // A12
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 1.5), 15f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		Vec3 start = p.position();
+		Level home = p.level();
+		TownhallConfig.Location townhall = TownhallMod.CONFIG.get().location("townhall").orElseThrow();
+		boolean adminOnly = townhall.adminOnly;
+		townhall.adminOnly = true;
+		try {
+			h.assertFalse(usable(server, p.createCommandSourceStack(), "townhall return"), "adminOnly root hidden from players");
+			opAt(p, "townhall send @s");
+			h.assertTrue(inTownhall(p), "sent there by an operator");
+			h.assertTrue(usable(server, p.createCommandSourceStack(), "townhall return"), "the sent player sees return");
+			ServerPlayer other = h.makeMockServerPlayerInLevel();
+			h.assertFalse(usable(server, other.createCommandSourceStack(), "townhall"), "still hidden from everyone else");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 15f, 0f);
+			h.assertFalse(usable(server, p.createCommandSourceStack(), "townhall return"), "hidden again after returning");
+		} finally {
+			townhall.adminOnly = adminOnly;
+		}
 		h.succeed();
 	}
 }

@@ -56,7 +56,7 @@ public final class ChatDisplayCommands {
 		return Commands.literal(name).then(Commands.argument("text", StringArgumentType.greedyString()).executes(ctx -> {
 			String value = StringArgumentType.getString(ctx, "text");
 			setter.accept(TownhallMod.CONFIG.get(), value.equals("-") ? "" : value);
-			TownhallMod.CONFIG.save();
+			if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
 			return ok(ctx, Component.literal(name + " message: ").withStyle(ChatFormatting.GREEN)
 					.append(value.equals("-") ? Component.literal("none") : JoinMessages.format(value, ctx.getSource().getDisplayName())));
 		}));
@@ -67,8 +67,9 @@ public final class ChatDisplayCommands {
 			String value = StringArgumentType.getString(ctx, "text");
 			List<String> lines = value.equals("-") ? List.of() : Arrays.asList(value.split("\\|", -1));
 			setter.accept(TownhallMod.CONFIG.get(), lines);
-			TownhallMod.CONFIG.save();
+			boolean saved = TownhallCommand.saveConfig(ctx.getSource());
 			TabList.update(ctx.getSource().getServer());
+			if (!saved) return 0;
 			return ok(ctx, Component.literal("Tab list " + name + " set (" + lines.size() + " lines).").withStyle(ChatFormatting.GREEN));
 		}));
 	}
@@ -78,7 +79,7 @@ public final class ChatDisplayCommands {
 		for (NameAndId p : GameProfileArgument.getGameProfiles(ctx, "player")) {
 			TownhallMod.CONFIG.get().joinMessages.players.put(p.id().toString(), text);
 		}
-		TownhallMod.CONFIG.save();
+		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
 		return ok(ctx, Component.literal("Personal join message: ").withStyle(ChatFormatting.GREEN).append(Text.of(text)));
 	}
 
@@ -87,20 +88,21 @@ public final class ChatDisplayCommands {
 		for (NameAndId p : GameProfileArgument.getGameProfiles(ctx, "player")) {
 			if (TownhallMod.CONFIG.get().joinMessages.players.remove(p.id().toString()) != null) removed++;
 		}
-		TownhallMod.CONFIG.save();
+		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
 		return ok(ctx, Component.literal(removed == 0 ? "No personal join message set." : "Personal join message removed.").withStyle(ChatFormatting.GREEN));
 	}
 
 	private static int toggleJoin(CommandContext<CommandSourceStack> ctx, boolean on) {
 		TownhallMod.CONFIG.get().joinMessages.enabled = on;
-		TownhallMod.CONFIG.save();
+		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
 		return ok(ctx, Component.literal(on ? "Own join messages are on." : "Vanilla join messages are back.").withStyle(ChatFormatting.GREEN));
 	}
 
 	private static int toggleTab(CommandContext<CommandSourceStack> ctx, boolean on) {
 		TownhallMod.CONFIG.get().tabList.enabled = on;
-		TownhallMod.CONFIG.save();
+		boolean saved = TownhallCommand.saveConfig(ctx.getSource());
 		TabList.update(ctx.getSource().getServer());
+		if (!saved) return 0;
 		return ok(ctx, Component.literal(on ? "Tab list header/footer on." : "Tab list header/footer off.").withStyle(ChatFormatting.GREEN));
 	}
 

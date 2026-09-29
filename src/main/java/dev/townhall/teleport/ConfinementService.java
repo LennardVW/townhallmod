@@ -82,6 +82,7 @@ public final class ConfinementService {
 		if (result == TeleportService.ReturnResult.NO_POSITION) {
 			TeleportService.sendToFallback(player, config);
 			storage.set(player.getUUID(), PlayerState.EMPTY);
+			TeleportService.resendCommands(player);
 		} else if (result == TeleportService.ReturnResult.FAILED) {
 			TownhallMod.LOGGER.error("Could not release {}, will retry", player.getPlainTextName());
 			return;

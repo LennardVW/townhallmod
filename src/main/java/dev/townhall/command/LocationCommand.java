@@ -19,8 +19,11 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 
 import java.util.List;
 import java.util.Locale;
@@ -73,13 +76,15 @@ public final class LocationCommand {
 		id.then(Commands.literal("command").then(Commands.argument("value", StringArgumentType.string()).executes(LocationCommand::setCommandName)));
 		id.then(Commands.literal("adminOnly").then(Commands.argument("value", BoolArgumentType.bool())
 				.executes(ctx -> change(ctx, "adminOnly", (l, v) -> l.adminOnly = v, BoolArgumentType.getBool(ctx, "value")))));
-		id.then(Commands.literal("escapable").then(Commands.argument("value", BoolArgumentType.bool())
-				.executes(ctx -> change(ctx, "escapable", (l, v) -> l.escapable = v, BoolArgumentType.getBool(ctx, "value")))));
+		id.then(Commands.literal("escapable").then(Commands.argument("value", BoolArgumentType.bool()).executes(LocationCommand::setEscapable)));
 		id.then(Commands.literal("radius").then(Commands.argument("value", IntegerArgumentType.integer(0, 100_000))
 				.executes(ctx -> change(ctx, "confineRadius", (l, v) -> l.confineRadius = v, IntegerArgumentType.getInteger(ctx, "value")))));
-		id.then(Commands.literal("dimension").then(Commands.argument("value", DimensionArgument.dimension())
-				.executes(ctx -> change(ctx, "dimension", (l, v) -> l.dimension = v,
-						DimensionArgument.getDimension(ctx, "value").dimension().identifier().toString()))));
+		id.then(Commands.literal("dimension").then(Commands.argument("value", DimensionArgument.dimension()).executes(ctx -> {
+			ResourceKey<Level> dimension = DimensionArgument.getDimension(ctx, "value").dimension();
+			String problem = sharedWorldProblem(ctx.getSource().getServer(), dimension);
+			if (problem != null) return fail(ctx, problem);
+			return change(ctx, "dimension", (l, v) -> l.dimension = v, dimension.identifier().toString());
+		})));
 		text(id, "name", (l, v) -> l.displayName = v);
 		text(id, "message", (l, v) -> l.arrivedMessage = v);
 		text(id, "alreadyHereMessage", (l, v) -> l.alreadyHereMessage = v);
@@ -88,12 +93,39 @@ public final class LocationCommand {
 		return Commands.literal("set").then(id);
 	}
 
-	/** Free text setting; "-" clears it. */
+	/** Free text setting; "-" clears it. alreadyHereMessage is filled in with the command name (%s), so a lone % is rejected. */
 	private static void text(RequiredArgumentBuilder<CommandSourceStack, String> id, String setting, BiConsumer<TownhallConfig.Location, String> setter) {
 		id.then(Commands.literal(setting).then(Commands.argument("value", StringArgumentType.greedyString()).executes(ctx -> {
 			String value = StringArgumentType.getString(ctx, "value");
+			if (setting.equals("alreadyHereMessage")) {
+				String problem = TownhallConfig.formatProblem(value, "townhall");
+				if (problem != null) return fail(ctx, "alreadyHereMessage: " + problem + ". %s is replaced by the command name.");
+			}
 			return change(ctx, setting, setter, value.equals("-") ? "" : value);
 		})));
+	}
+
+	/** escapable true also frees everyone already confined there (their return position and timer stay). */
+	private static int setEscapable(CommandContext<CommandSourceStack> ctx) {
+		boolean value = BoolArgumentType.getBool(ctx, "value");
+		int result = change(ctx, "escapable", (l, v) -> l.escapable = v, value);
+		// The change is live even if saving failed, so free the prisoners whenever the location exists.
+		if (!value || !TownhallMod.CONFIG.get().locations.containsKey(id(ctx))) return result;
+		int released = ReturnPositionStorage.get(ctx.getSource().getServer()).releaseConfinedAt(id(ctx));
+		if (released > 0) ok(ctx, released + " confined player(s) there may leave now (return).");
+		return result;
+	}
+
+	/**
+	 * The overworld and the fallback world are shared by everyone: a location there makes /&lt;cmd&gt; say "already there"
+	 * and never stores a return position for anyone in that world. Returns why, or null if the world is fine.
+	 */
+	private static String sharedWorldProblem(MinecraftServer server, ResourceKey<Level> dimension) {
+		TownhallConfig config = TownhallMod.CONFIG.get();
+		boolean shared = dimension.equals(Level.OVERWORLD) || dimension.equals(config.fallbackDimension())
+				|| (config.fallback.useWorldSpawn && dimension.equals(server.getRespawnData().dimension()));
+		return shared ? dimension.identifier() + " is the overworld/fallback world that everyone shares. A location there would break /<cmd> and return"
+				+ " for everyone in it; use a world of its own." : null;
 	}
 
 	private static <T> int change(CommandContext<CommandSourceStack> ctx, String setting, BiConsumer<TownhallConfig.Location, T> setter, T value) {
@@ -101,8 +133,8 @@ public final class LocationCommand {
 		TownhallConfig.Location location = TownhallMod.CONFIG.get().locations.get(id);
 		if (location == null) return unknown(ctx, id);
 		setter.accept(location, value);
-		saveAndRefresh(ctx);
 		TownhallMod.LOGGER.info("{} set {} of location {} to {}", ctx.getSource().getTextName(), setting, id, value);
+		if (!saveAndRefresh(ctx)) return 0;
 		return ok(ctx, setting + " of " + id + " is now " + (value instanceof String s && s.isEmpty() ? "empty" : value) + ".");
 	}
 
@@ -116,8 +148,8 @@ public final class LocationCommand {
 		if (problem != null) return fail(ctx, problem);
 		String old = location.command;
 		location.command = name;
-		saveAndRefresh(ctx);
 		TownhallMod.LOGGER.info("{} renamed the command of location {} from /{} to /{}", ctx.getSource().getTextName(), id, old, name);
+		if (!saveAndRefresh(ctx)) return 0;
 		return ok(ctx, id + " now uses /" + name + " (/" + old + " is gone).");
 	}
 
@@ -136,6 +168,8 @@ public final class LocationCommand {
 		if (config.locations.containsKey(id)) return fail(ctx, "Location " + id + " already exists.");
 		String problem = commandProblem(ctx, id, null);
 		if (problem != null) return fail(ctx, problem + " Pick another id, or rename its command later with /location set <id> command <name>.");
+		String shared = sharedWorldProblem(ctx.getSource().getServer(), player.level().dimension());
+		if (shared != null) return fail(ctx, shared);
 
 		TownhallConfig.Location location = new TownhallConfig.Location();
 		location.command = id;
@@ -148,8 +182,8 @@ public final class LocationCommand {
 		location.arrivedMessage = prison ? "You were sent to " + id + "." : "Welcome to " + id + "!";
 		location.alreadyHereMessage = "You are already here. Use /%s return to go back.";
 		config.locations.put(id, location);
-		saveAndRefresh(ctx);
 		TownhallMod.LOGGER.info("{} created location {} ({}) in {}", ctx.getSource().getTextName(), id, prison ? "prison" : "normal", location.dimension);
+		if (!saveAndRefresh(ctx)) return 0;
 		return ok(ctx, "Created /" + id + (prison ? " as a prison (admins only, no escape)" : "") + ". Spawn = your position.");
 	}
 
@@ -163,8 +197,8 @@ public final class LocationCommand {
 				.filter(uuid -> storage.state(uuid).location().map(id::equals).orElse(false)).count();
 		if (inside > 0) return fail(ctx, inside + " player(s) are still held there. Release them first with /" + config.locations.get(id).command + " return <player>.");
 		config.locations.remove(id);
-		saveAndRefresh(ctx);
 		TownhallMod.LOGGER.info("{} deleted location {}", ctx.getSource().getTextName(), id);
+		if (!saveAndRefresh(ctx)) return 0;
 		return ok(ctx, "Deleted " + id + ".");
 	}
 
@@ -173,10 +207,12 @@ public final class LocationCommand {
 		String id = id(ctx);
 		TownhallConfig.Location location = TownhallMod.CONFIG.get().locations.get(id);
 		if (location == null) return unknown(ctx, id);
+		String shared = sharedWorldProblem(ctx.getSource().getServer(), player.level().dimension());
+		if (shared != null) return fail(ctx, shared);
 		location.dimension = player.level().dimension().identifier().toString();
 		location.spawn = new TownhallConfig.Spot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-		saveAndRefresh(ctx);
 		TownhallMod.LOGGER.info("{} set the spawn of {} to {} in {}", ctx.getSource().getTextName(), id, spot(location.spawn), location.dimension);
+		if (!saveAndRefresh(ctx)) return 0;
 		return ok(ctx, "Spawn of " + id + " set to " + spot(location.spawn) + " in " + location.dimension + ".");
 	}
 
@@ -212,9 +248,10 @@ public final class LocationCommand {
 		return 1;
 	}
 
-	private static void saveAndRefresh(CommandContext<CommandSourceStack> ctx) {
-		TownhallMod.CONFIG.save();
+	/** The change is live either way; returns false (and tells the admin) if it could not be saved. */
+	private static boolean saveAndRefresh(CommandContext<CommandSourceStack> ctx) {
 		TownhallCommand.refreshCommands(ctx.getSource().getServer());
+		return TownhallCommand.saveConfig(ctx.getSource());
 	}
 
 	private static String spot(TownhallConfig.Spot s) {

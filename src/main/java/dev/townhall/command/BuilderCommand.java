@@ -71,10 +71,11 @@ public final class BuilderCommand {
 		TownhallConfig.DimensionRules rules = config.dimensions.computeIfAbsent(dim, k -> new TownhallConfig.DimensionRules());
 		if (rules.builders == null) rules.builders = new LinkedHashMap<>();
 		for (NameAndId player : players) rules.builders.put(player.id().toString(), player.name());
-		save(config);
+		boolean saved = save(ctx, config);
 		resendCommands(ctx);
 		String names = String.join(", ", players.stream().map(NameAndId::name).toList());
 		TownhallMod.LOGGER.info("{} made {} builder(s) in {}", ctx.getSource().getTextName(), names, dim);
+		if (!saved) return 0;
 		boolean buildOff = !DimensionSettings.of(DimensionArgument.getDimension(ctx, "dimension").dimension()).build();
 		return ok(ctx, names + " can now build in " + dim + "."
 				+ (buildOff ? "" : " Note: building is open for everyone there; turn it off with /townhall worldrule " + dim + " build false."));
@@ -90,10 +91,11 @@ public final class BuilderCommand {
 			return 0;
 		}
 		if (rules.builders.isEmpty()) rules.builders = null;
-		save(config);
+		boolean saved = save(ctx, config);
 		ctx.getSource().getServer().getPlayerList().getPlayers().forEach(Protection::enforceBuilderMode);
 		resendCommands(ctx);
 		TownhallMod.LOGGER.info("{} removed builder {} in {}", ctx.getSource().getTextName(), name, dim);
+		if (!saved) return 0;
 		return ok(ctx, name + " can no longer build in " + dim + ".");
 	}
 
@@ -135,9 +137,10 @@ public final class BuilderCommand {
 		server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
 	}
 
-	private static void save(TownhallConfig config) {
-		TownhallMod.CONFIG.save();
+	/** Applies the change live; returns false (and tells the admin) if it could not be saved. */
+	private static boolean save(CommandContext<CommandSourceStack> ctx, TownhallConfig config) {
 		DimensionSettings.rebuild(config);
+		return TownhallCommand.saveConfig(ctx.getSource());
 	}
 
 	private static int ok(CommandContext<CommandSourceStack> ctx, String message) {
