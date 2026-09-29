@@ -1,0 +1,9 @@
+{
+	"required": true,
+	"package": "dev.townhall.test.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": ["OtherModWeatherRedirectMixin"],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

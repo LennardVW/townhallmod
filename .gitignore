@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------
+# Build-Ausgaben und Caches
+# ---------------------------------------------------------------
+build/
+/out/
+/bin/
+.gradle/
+.kotlin/
+classes/
+*.class
+
+# ---------------------------------------------------------------
+# Lokaler Test-Server (./gradlew runServer / runGameTest)
+# Enthält Welt, Spieler-UUIDs, IPs, Op-Liste und Logs.
+# ---------------------------------------------------------------
+run/
+/world/
+/logs/
+/crash-reports/
+*.log
+*.log.gz
+ops.json
+whitelist.json
+banned-ips.json
+banned-players.json
+usercache.json
+usernamecache.json
+server.properties
+eula.txt
+
+# Live-Konfiguration eines echten Servers nie mit einchecken
+/config/
+
+# ---------------------------------------------------------------
+# Zugangsdaten und Schlüssel
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.gpg
+*.asc
+id_rsa*
+id_ed25519*
+*secret*
+*credential*
+*token*.txt
+# Lokale Gradle-Overrides (Signing-Keys, Maven-/Modrinth-/CurseForge-Tokens)
+local.properties
+gradle-local.properties
+secrets.properties
+publish.properties
+
+# ---------------------------------------------------------------
+# Server-Dumps und Profiler-Ausgaben (können Spielerdaten enthalten)
+# ---------------------------------------------------------------
+*.hprof
+hs_err_pid*
+replay_pid*
+/spark/
+*.sparkprofile
+*.nbt.bak
+
+# ---------------------------------------------------------------
+# Fertige Jars nur über GitHub Releases verteilen, nicht im Repo
+# (gradle/wrapper/gradle-wrapper.jar wird gebraucht)
+# ---------------------------------------------------------------
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---------------------------------------------------------------
+# IDEs und Betriebssystem
+# ---------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------
+# Lokale Agenten-Einstellungen
+# ---------------------------------------------------------------
+.claude/settings.local.json

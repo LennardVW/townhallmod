@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "townhall",
+	"version": "${version}",
+	"name": "Townhall",
+	"description": "Server-side /townhall command: travel to the Townhall world and back to exactly where you were. Vanilla clients can join.",
+	"authors": ["Lennard"],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["dev.townhall.TownhallMod"]
+	},
+	"mixins": ["townhall.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

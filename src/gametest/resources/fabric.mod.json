@@ -1,0 +1,13 @@
+{
+	"schemaVersion": 1,
+	"id": "townhall-gametest",
+	"version": "1.0.0",
+	"name": "Townhall GameTests",
+	"description": "Townhall tests; the Nether stands in for the multiworld Townhall dimension.",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": ["dev.townhall.test.TownhallGameTests"]
+	},
+	"mixins": ["townhall-gametest.mixins.json"],
+	"depends": { "townhall": "*" }
+}
