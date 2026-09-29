@@ -55,7 +55,11 @@ public final class TeleportService {
 		if (target == null) return EnterResult.UNAVAILABLE;
 
 		ReturnLocation before = ReturnLocation.of(player);
-		if (!teleportToSpawn(player, location)) return EnterResult.FAILED;
+		if (!teleportToSpawn(player, location)) {
+			TownhallMod.LOGGER.error("Teleport of {} to {} ({} at {} {} {}) failed", player.getPlainTextName(), locationId, location.dimension,
+					location.spawn.x, location.spawn.y, location.spawn.z);
+			return EnterResult.FAILED;
+		}
 
 		// Keep an existing return position while the player is at a location, also if that location was moved to another
 		// world meanwhile (then the world they leave is no longer a location world, but it isn't their home either).

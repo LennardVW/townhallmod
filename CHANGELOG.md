@@ -2,6 +2,13 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.14.2
+- `/townhall debug <spieler>` zeigt jetzt auch, unter welchem Namen die Rückkehr-Position gespeichert wurde.
+- `/townhall status` zeigt die nichtssagende Zeile „Persistent storage: loaded“ nicht mehr.
+- Schlägt ein Teleport zu einem Ort fehl, steht der Grund jetzt wirklich im Server-Log (die Meldung verweist darauf).
+- Die Mod verlangt jetzt ausdrücklich Fabric API 0.161.0 oder neuer. Mit einer älteren Version startet der Server mit einer klaren Meldung statt mit einem Fehler mitten im Spiel.
+- Intern: Tests laufen bei jedem Durchgang mit frischer Welt und Config und prüfen die genauen Meldungen; doppelter Code in den Befehlen zusammengefasst; Speicher wird beim Server-Stopp aufgeräumt; automatischer Build auf GitHub; Lizenz liegt im Jar.
+
 ## 1.14.1
 - Schneller: Die Suche nach einem sicheren Platz beim Zurückkehren (`return`) braucht im schlimmsten Fall (Radius 16, kein sicherer Platz) etwa 3 ms statt 37 ms. Gefunden wird genau derselbe Platz wie vorher.
 - Schneller: `/playtime top` sortiert nicht mehr alle Spieler, sondern merkt sich nur die besten 10 (10 000 Spieler: 0,04 ms statt 1,5 ms).

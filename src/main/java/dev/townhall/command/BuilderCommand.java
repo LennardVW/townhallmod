@@ -25,6 +25,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static dev.townhall.command.Feedback.fail;
+import static dev.townhall.command.Feedback.ok;
+import static dev.townhall.command.Feedback.okAdmin;
+
 /**
  * Builders: players who may build in a world whose "build" rule is false (normally only operators can).
  * <pre>
@@ -72,12 +76,12 @@ public final class BuilderCommand {
 		if (rules.builders == null) rules.builders = new LinkedHashMap<>();
 		for (NameAndId player : players) rules.builders.put(player.id().toString(), player.name());
 		boolean saved = save(ctx, config);
-		resendCommands(ctx);
+		TownhallCommand.sendCommandsToAll(ctx.getSource().getServer()); // /builder shows up (or disappears) right away
 		String names = String.join(", ", players.stream().map(NameAndId::name).toList());
 		TownhallMod.LOGGER.info("{} made {} builder(s) in {}", ctx.getSource().getTextName(), names, dim);
 		if (!saved) return 0;
 		boolean buildOff = !DimensionSettings.of(DimensionArgument.getDimension(ctx, "dimension").dimension()).build();
-		return ok(ctx, names + " can now build in " + dim + "."
+		return okAdmin(ctx.getSource(), names + " can now build in " + dim + "."
 				+ (buildOff ? "" : " Note: building is open for everyone there; turn it off with /townhall worldrule " + dim + " build false."));
 	}
 
@@ -87,30 +91,27 @@ public final class BuilderCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		TownhallConfig.DimensionRules rules = config.dimensions.get(dim);
 		if (rules == null || rules.builders == null || !rules.builders.values().removeIf(n -> n.equalsIgnoreCase(name))) {
-			ctx.getSource().sendFailure(Component.literal(name + " is not a builder in " + dim + "."));
-			return 0;
+			return fail(ctx.getSource(), name + " is not a builder in " + dim + ".");
 		}
 		if (rules.builders.isEmpty()) rules.builders = null;
 		boolean saved = save(ctx, config);
 		ctx.getSource().getServer().getPlayerList().getPlayers().forEach(Protection::enforceBuilderMode);
-		resendCommands(ctx);
+		TownhallCommand.sendCommandsToAll(ctx.getSource().getServer()); // /builder shows up (or disappears) right away
 		TownhallMod.LOGGER.info("{} removed builder {} in {}", ctx.getSource().getTextName(), name, dim);
 		if (!saved) return 0;
-		return ok(ctx, name + " can no longer build in " + dim + ".");
+		return okAdmin(ctx.getSource(), name + " can no longer build in " + dim + ".");
 	}
 
 	private static int mode(CommandContext<CommandSourceStack> ctx, GameType mode) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		if (mode == GameType.CREATIVE && !Protection.isBuilderHere(player) && !TownhallCommand.isOperator(ctx.getSource())) {
-			ctx.getSource().sendFailure(Component.literal("You are not a builder in this world."));
-			return 0;
+			return fail(ctx.getSource(), "You are not a builder in this world.");
 		}
 		player.setGameMode(mode);
 		if (mode == GameType.CREATIVE) player.addTag(Protection.BUILDER_CREATIVE_TAG);
 		else player.removeTag(Protection.BUILDER_CREATIVE_TAG);
 		TownhallMod.LOGGER.info("{} switched to {} as builder in {}", player.getPlainTextName(), mode.getName(), player.level().dimension().identifier());
-		ctx.getSource().sendSuccess(() -> Component.literal("Game mode: " + mode.getName()).withStyle(ChatFormatting.GREEN), false);
-		return 1;
+		return ok(ctx.getSource(), "Game mode: " + mode.getName());
 	}
 
 	private static int list(CommandContext<CommandSourceStack> ctx, String onlyDim) {
@@ -131,20 +132,10 @@ public final class BuilderCommand {
 		return rules == null || rules.builders == null || rules.builders.isEmpty() ? "none" : String.join(", ", rules.builders.values());
 	}
 
-	/** /builder shows up (or disappears) for the affected players right away. */
-	private static void resendCommands(CommandContext<CommandSourceStack> ctx) {
-		var server = ctx.getSource().getServer();
-		server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
-	}
-
 	/** Applies the change live; returns false (and tells the admin) if it could not be saved. */
 	private static boolean save(CommandContext<CommandSourceStack> ctx, TownhallConfig config) {
 		DimensionSettings.rebuild(config);
 		return TownhallCommand.saveConfig(ctx.getSource());
 	}
 
-	private static int ok(CommandContext<CommandSourceStack> ctx, String message) {
-		ctx.getSource().sendSuccess(() -> Component.literal(message).withStyle(ChatFormatting.GREEN), true);
-		return 1;
-	}
 }

@@ -6,7 +6,7 @@ Townhall fasst die Dinge zusammen, für die man sonst mehrere Plugins bräuchte:
 
 Die Mod läuft nur auf dem Server. Spieler joinen mit einem ganz normalen Minecraft-Client und müssen nichts installieren.
 
-Aktuelle Version: **1.14.1**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: **1.14.2**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

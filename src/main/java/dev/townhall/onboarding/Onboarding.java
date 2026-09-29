@@ -67,6 +67,11 @@ public final class Onboarding {
 		PENDING.remove(player.getUUID());
 	}
 
+	/** Server stopped: drop pending players and with them their references to the old server's worlds. */
+	public static void reset() {
+		PENDING.clear();
+	}
+
 	/** Welcome, tutorial and rules, only to this player. */
 	public static void showAll(ServerPlayer player) {
 		TownhallConfig.Onboarding cfg = TownhallMod.CONFIG.get().onboarding;

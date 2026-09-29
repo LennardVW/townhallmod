@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Numbers refer to the test list in the original task. */
+/** GameTests for locations, protection, onboarding, nicknames, keys and activity. World rules: {@link WorldRulesGameTests}. */
 public class TownhallGameTests {
 
 	private static final double EPS = 1.0E-6;
@@ -69,8 +69,18 @@ public class TownhallGameTests {
 
 	/** Operator source acting as the player, so @s is exactly that mock player (names are all the same, UUIDs are rejected). */
 	private static void opAt(ServerPlayer p, String command) {
-		MinecraftServer server = p.level().getServer();
-		server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withEntity(p).withLevel(p.level()).withPosition(p.position()), command);
+		p.level().getServer().getCommands().performPrefixedCommand(opSource(p), command);
+	}
+
+	private static CommandSourceStack opSource(ServerPlayer p) {
+		return p.level().getServer().createCommandSourceStack().withEntity(p).withLevel(p.level()).withPosition(p.position());
+	}
+
+	/** Runs the command as {@code source} and returns what it told the sender (success and failure texts). */
+	private static Capture capture(CommandSourceStack source, String command) {
+		Capture out = new Capture();
+		source.getServer().getCommands().performPrefixedCommand(source.withSource(out), command);
+		return out;
 	}
 
 	private static boolean inTownhall(ServerPlayer p) {
@@ -84,7 +94,7 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void enterAndReturnExactly(GameTestHelper h) { // 1 + 2
+	public void enterAndReturnExactly(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(3.35, 1, 3.81), 127.4f, 8.2f);
 		Level home = p.level();
 		Vec3 start = p.position();
@@ -103,21 +113,24 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void secondTownhallDoesNotOverwrite(GameTestHelper h) { // 4
+	public void secondTownhallDoesNotOverwrite(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 10f, 5f);
 		Vec3 start = p.position();
 		Level home = p.level();
 		run(p, "townhall");
 		p.absSnapTo(p.getX() + 3, p.getY() + 1, p.getZ() + 3, 90f, 0f); // wander around the Townhall
-		run(p, "townhall");
+		Capture out = capture(p.createCommandSourceStack(), "townhall");
+		TownhallConfig.Location townhall = TownhallMod.CONFIG.get().location("townhall").orElseThrow();
+		h.assertTrue(out.said(townhall.alreadyHereMessage.formatted(townhall.command)), "second /townhall says already there: " + out.messages);
 		h.assertTrue(inTownhall(p), "still in Townhall");
+		h.assertTrue(ReturnPositionStorage.get(h.getLevel().getServer()).get(p.getUUID()).orElseThrow().yaw() == 10f, "stored spot not overwritten");
 		run(p, "townhall return");
 		assertAt(h, p, home, start, 10f, 5f);
 		h.succeed();
 	}
 
 	@GameTest
-	public void operatorSendAndReturn(GameTestHelper h) { // 5 + 6
+	public void operatorSendAndReturn(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(4.2, 1, 1.7), -45f, 12f);
 		Vec3 start = p.position();
 		Level home = p.level();
@@ -131,24 +144,27 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void returnWithoutDataDoesNothing(GameTestHelper h) { // 7
+	public void returnWithoutDataDoesNothing(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
 		Vec3 start = p.position();
-		run(p, "townhall return");
-		opAt(p, "townhall return @s");
+		Capture self = capture(p.createCommandSourceStack(), "townhall return");
+		h.assertTrue(self.said(TownhallMod.CONFIG.get().messages.noReturnPosition), "player is told nothing is stored: " + self.messages);
+		Capture op = capture(opSource(p), "townhall return @s");
+		h.assertTrue(op.said("No return position stored for"), "operator is told nothing is stored: " + op.messages);
 		h.assertTrue(p.level() == h.getLevel() && p.position().distanceTo(start) < EPS, "player not moved");
 		h.succeed();
 	}
 
 	@GameTest
-	public void missingDimensionFailsCleanly(GameTestHelper h) { // 8
+	public void missingDimensionFailsCleanly(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		TownhallConfig.Location townhall = config.location("townhall").orElseThrow();
 		String real = townhall.dimension;
 		townhall.dimension = "minecraft:does_not_exist";
 		try {
-			run(p, "townhall");
+			Capture out = capture(p.createCommandSourceStack(), "townhall");
+			h.assertTrue(out.said(config.messages.locationUnavailable.formatted("minecraft:does_not_exist")), "player is told the world is missing: " + out.messages);
 			h.assertTrue(p.level() == h.getLevel(), "player stays");
 			h.assertTrue(ReturnPositionStorage.get(h.getLevel().getServer()).get(p.getUUID()).isEmpty(), "nothing stored");
 		} finally {
@@ -158,7 +174,7 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void invalidConfigKeepsPrevious(GameTestHelper h) throws IOException { // 9
+	public void invalidConfigKeepsPrevious(GameTestHelper h) throws IOException {
 		Path dir = Files.createTempDirectory("townhall-test");
 		Path file = dir.resolve("townhall.json");
 		ConfigManager manager = new ConfigManager(file);
@@ -179,7 +195,7 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void storageSurvivesSaveAndLoadByUuid(GameTestHelper h) { // 3 + 10
+	public void storageSurvivesSaveAndLoadByUuid(GameTestHelper h) {
 		UUID id = UUID.randomUUID();
 		ReturnPositionStorage storage = new ReturnPositionStorage();
 		storage.set(id, PlayerState.EMPTY.withReturnPosition(
@@ -194,7 +210,7 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void blockedSpotUsesNearbySafeSpot(GameTestHelper h) { // 11
+	public void blockedSpotUsesNearbySafeSpot(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
 		Vec3 start = p.position();
 		run(p, "townhall");
@@ -208,7 +224,7 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void noSafeSpotUsesFallback(GameTestHelper h) { // 11 fallback
+	public void noSafeSpotUsesFallback(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
 		run(p, "townhall");
 		h.setBlock(new BlockPos(3, 1, 3), Blocks.LAVA);
@@ -229,7 +245,7 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
-	public void cooldownBlocksSpam(GameTestHelper h) { // 21
+	public void cooldownBlocksSpam(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
 		TownhallMod.CONFIG.get().commands.cooldownSeconds = 3;
 		try {
@@ -246,12 +262,49 @@ public class TownhallGameTests {
 	@GameTest
 	public void setspawnOnlyInTownhall(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
-		TownhallConfig.Spot before = TownhallMod.CONFIG.get().location("townhall").orElseThrow().spawn;
+		MinecraftServer server = h.getLevel().getServer();
+		TownhallConfig.Location townhall = TownhallMod.CONFIG.get().location("townhall").orElseThrow();
+		TownhallConfig.Spot before = townhall.spawn;
 		// the mock player is not an operator, so the command is not even available to it
+		h.assertFalse(usable(server, p.createCommandSourceStack(), "townhall setspawn"), "non-op has no setspawn");
 		run(p, "townhall setspawn");
-		h.assertTrue(TownhallMod.CONFIG.get().location("townhall").orElseThrow().spawn == before, "non-op can't set spawn");
-		console(h.getLevel().getServer(), "townhall setspawn"); // console: must be a player, must not crash
-		h.assertTrue(TownhallMod.CONFIG.get().location("townhall").orElseThrow().spawn == before, "console can't set spawn");
+		h.assertTrue(townhall.spawn == before, "non-op can't set spawn");
+		Capture fromConsole = capture(server.createCommandSourceStack(), "townhall setspawn");
+		h.assertTrue(fromConsole.said("must be executed by a player"), "console is told to be a player: " + fromConsole.messages);
+		h.assertTrue(townhall.spawn == before, "console can't set spawn");
+		Capture outside = capture(opSource(p), "townhall setspawn");
+		h.assertTrue(outside.said("Stand in " + townhall.dimension), "operator outside the Townhall world is told where to stand: " + outside.messages);
+		h.assertTrue(townhall.spawn == before, "no spawn outside the Townhall world");
+
+		// Positive control: an operator standing in the Townhall world sets it (on the same spot, so parallel tests don't notice).
+		p.teleportTo(server.getLevel(townhall.dimensionKey()), before.x, before.y, before.z, java.util.Set.of(), before.yaw, before.pitch, true);
+		try {
+			Capture inside = capture(opSource(p), "townhall setspawn");
+			h.assertTrue(inside.said("Spawn of " + TownhallMod.CONFIG.get().displayName("townhall") + " set to"), "operator sets the spawn: " + inside.messages);
+			h.assertTrue(townhall.spawn != before && townhall.spawn.x == before.x && townhall.spawn.y == before.y && townhall.spawn.z == before.z,
+					"new spawn stored at the operator's position");
+		} finally {
+			townhall.spawn = before;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void debugAndStatusShowRealData(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(4.5, 1, 4.5), 0f, 0f);
+		MinecraftServer server = h.getLevel().getServer();
+		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
+		// Stored directly, so the player stays on its own floor and @p[distance=..0.5] finds exactly this mock player.
+		storage.set(p.getUUID(), PlayerState.EMPTY.withReturnPosition(ReturnLocation.of(p)));
+		try {
+			Capture debug = capture(opSource(p), "townhall debug @p[distance=..0.5]");
+			h.assertTrue(debug.said("(as " + p.getPlainTextName() + ")"), "debug shows the name stored with the return position: " + debug.messages);
+			Capture status = capture(server.createCommandSourceStack(), "townhall status");
+			h.assertTrue(status.said("Stored return positions"), "status lists the stored positions: " + status.messages);
+			h.assertFalse(status.said("Persistent storage"), "no constant filler line: " + status.messages);
+		} finally {
+			storage.remove(p.getUUID());
+		}
 		h.succeed();
 	}
 
@@ -308,7 +361,13 @@ public class TownhallGameTests {
 	public void playersCantUseAdminOnlyLocations(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
 		Vec3 start = p.position();
+		MinecraftServer server = h.getLevel().getServer();
+		h.assertFalse(usable(server, p.createCommandSourceStack(), "gefaengnis"), "adminOnly root is hidden from players");
 		run(p, "gefaengnis");
+		// A sign runs with GAMEMASTER source rights but the player's own rights decide: the explicit check answers.
+		Capture sign = capture(new CommandSourceStack(CommandSource.NULL, p.position(), Vec2.ZERO, (ServerLevel) p.level(),
+				LevelBasedPermissionSet.GAMEMASTER, server, p), "gefaengnis");
+		h.assertTrue(sign.said("Only operators can go there"), "players are told why: " + sign.messages);
 		h.assertTrue(p.level() == h.getLevel() && p.position().distanceTo(start) < EPS, "player not moved");
 		h.assertTrue(ReturnPositionStorage.get(h.getLevel().getServer()).state(p.getUUID()).isEmpty(), "nothing stored");
 		h.succeed();
@@ -560,12 +619,23 @@ public class TownhallGameTests {
 			throw e;
 		}
 		// Sky light is sampled through the world's clocks once per tick: compare it at midnight and at noon.
+		// Each callback resets the rule if it fails, so a failure can't leave the overworld pinned for the other tests.
 		h.runAfterDelay(3, () -> {
-			float midnight = overworld.environmentAttributes().getDimensionValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_LEVEL);
-			console(server, "townhall worldrule minecraft:overworld time noon");
-			h.runAfterDelay(3, () -> {
-				float noon = overworld.environmentAttributes().getDimensionValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_LEVEL);
+			float midnight;
+			try {
+				midnight = overworld.environmentAttributes().getDimensionValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_LEVEL);
+				console(server, "townhall worldrule minecraft:overworld time noon");
+			} catch (RuntimeException e) {
 				console(server, "townhall worldrule minecraft:overworld time default");
+				throw e;
+			}
+			h.runAfterDelay(3, () -> {
+				float noon;
+				try {
+					noon = overworld.environmentAttributes().getDimensionValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_LEVEL);
+				} finally {
+					console(server, "townhall worldrule minecraft:overworld time default");
+				}
 				h.assertTrue(noon > midnight, "sky is brighter at fixed noon (" + noon + ") than at fixed midnight (" + midnight + ")");
 				h.assertTrue(DimensionSettings.fixedTime(Level.OVERWORLD) == null, "time runs normally after default");
 				h.succeed();
@@ -580,10 +650,16 @@ public class TownhallGameTests {
 		h.assertFalse(DimensionSettings.hasFixedWeather(Level.OVERWORLD), "normal weather at start");
 		console(server, "townhall worldrule minecraft:overworld weather rain");
 		h.assertTrue(DimensionSettings.hasFixedWeather(Level.OVERWORLD), "fixed weather set");
+		// Every failure path resets the rule, so a failed run can't leave fixed weather behind for the other tests.
 		h.runAfterDelay(40, () -> {
 			boolean raining = overworld.isRaining(), thundering = overworld.isThundering();
 			console(server, "townhall worldrule minecraft:overworld weather clear");
-			h.assertTrue(raining && !thundering, "rain set: raining, no thunder");
+			try {
+				h.assertTrue(raining && !thundering, "rain set: raining, no thunder");
+			} catch (RuntimeException e) {
+				console(server, "townhall worldrule minecraft:overworld weather default");
+				throw e;
+			}
 			h.runAfterDelay(40, () -> {
 				boolean stillRaining = overworld.isRaining();
 				console(server, "townhall worldrule minecraft:overworld weather default");

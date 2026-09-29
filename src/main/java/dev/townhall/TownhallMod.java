@@ -60,11 +60,16 @@ public class TownhallMod implements ModInitializer {
 			ChatDisplayCommands.register(dispatcher);
 		});
 		ServerLifecycleEvents.SERVER_STARTED.register(TownhallMod::onServerStarted);
-		// Confined players (e.g. prison) respawn inside their location instead of escaping through death.
+		ServerLifecycleEvents.SERVER_STOPPED.register(TownhallMod::onServerStopped);
+		// Respawn, in this order: confined players (e.g. prison) are put back inside their location first, so the world
+		// settings, builder mode and tab list score below apply to the world they end up in.
 		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
 			if (!alive) ConfinementService.keepConfined(newPlayer, CONFIG.get());
+			DimensionSettings.onEnter(newPlayer);
+			Protection.enforceBuilderMode(newPlayer);
+			DeathsInTab.sync(newPlayer);
 		});
-		// Entering a world: show its difficulty (the client only knows one), fill food where hunger is off.
+		// Join: nickname maps, the world's difficulty/time (the client only knows one), builder mode, deaths, onboarding, join message, tab list.
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			Nicknames.onJoin(handler.player);
 			DimensionSettings.onEnter(handler.player);
@@ -81,15 +86,10 @@ public class TownhallMod implements ModInitializer {
 			Afk.onLeave(handler.player);
 			JoinMessages.onLeave(handler.player);
 		});
-		// Builders may only be in creative inside their builder worlds.
+		// World change: that world's difficulty/time/food, and builders may only be in creative inside their builder worlds.
 		ServerEntityLevelChangeEvents.AFTER_PLAYER_CHANGE_LEVEL.register((player, from, to) -> {
 			DimensionSettings.onEnter(player);
 			Protection.enforceBuilderMode(player);
-		});
-		ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
-			DimensionSettings.onEnter(newPlayer);
-			Protection.enforceBuilderMode(newPlayer);
-			DeathsInTab.sync(newPlayer);
 		});
 		Protection.register();
 		BuilderPermissions.register();
@@ -116,6 +116,17 @@ public class TownhallMod implements ModInitializer {
 		});
 		ReturnPositionStorage storage = ReturnPositionStorage.get(server);
 		LOGGER.info("Loaded {} stored return positions ({} confined players)", storage.returnPositionCount(), storage.confinedCount());
+	}
+
+	/**
+	 * In-memory state of the stopped server goes, so a second server in the same JVM (singleplayer: leave and open
+	 * another world) starts clean and nothing keeps the old worlds alive. Stored data lives in SavedData and stays.
+	 */
+	private static void onServerStopped(MinecraftServer server) {
+		TownhallCommand.reset();
+		KeyCommand.reset();
+		Onboarding.reset();
+		Afk.reset();
 	}
 
 	/** Operator = has the permission level from commands.operatorPermissionLevel. Operators are never confined. */

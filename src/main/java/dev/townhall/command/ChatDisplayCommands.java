@@ -20,6 +20,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiConsumer;
 
+import static dev.townhall.command.Feedback.okAdmin;
+
 /**
  * Operator-only, all saved to the config at once:
  * <pre>
@@ -57,7 +59,7 @@ public final class ChatDisplayCommands {
 			String value = StringArgumentType.getString(ctx, "text");
 			setter.accept(TownhallMod.CONFIG.get(), value.equals("-") ? "" : value);
 			if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
-			return ok(ctx, Component.literal(name + " message: ").withStyle(ChatFormatting.GREEN)
+			return okAdmin(ctx.getSource(), Component.literal(name + " message: ").withStyle(ChatFormatting.GREEN)
 					.append(value.equals("-") ? Component.literal("none") : JoinMessages.format(value, ctx.getSource().getDisplayName())));
 		}));
 	}
@@ -70,7 +72,7 @@ public final class ChatDisplayCommands {
 			boolean saved = TownhallCommand.saveConfig(ctx.getSource());
 			TabList.update(ctx.getSource().getServer());
 			if (!saved) return 0;
-			return ok(ctx, Component.literal("Tab list " + name + " set (" + lines.size() + " lines).").withStyle(ChatFormatting.GREEN));
+			return okAdmin(ctx.getSource(), Component.literal("Tab list " + name + " set (" + lines.size() + " lines).").withStyle(ChatFormatting.GREEN));
 		}));
 	}
 
@@ -81,7 +83,7 @@ public final class ChatDisplayCommands {
 			TownhallMod.CONFIG.get().joinMessages.players.put(p.id().toString(), none ? "" : text);
 		}
 		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
-		return ok(ctx, Component.literal("Personal join message: ").withStyle(ChatFormatting.GREEN).append(none ? Component.literal("none") : Text.of(text)));
+		return okAdmin(ctx.getSource(), Component.literal("Personal join message: ").withStyle(ChatFormatting.GREEN).append(none ? Component.literal("none") : Text.of(text)));
 	}
 
 	private static int resetPersonal(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -90,13 +92,13 @@ public final class ChatDisplayCommands {
 			if (TownhallMod.CONFIG.get().joinMessages.players.remove(p.id().toString()) != null) removed++;
 		}
 		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
-		return ok(ctx, Component.literal(removed == 0 ? "No personal join message set." : "Personal join message removed.").withStyle(ChatFormatting.GREEN));
+		return okAdmin(ctx.getSource(), Component.literal(removed == 0 ? "No personal join message set." : "Personal join message removed.").withStyle(ChatFormatting.GREEN));
 	}
 
 	private static int toggleJoin(CommandContext<CommandSourceStack> ctx, boolean on) {
 		TownhallMod.CONFIG.get().joinMessages.enabled = on;
 		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
-		return ok(ctx, Component.literal(on ? "Own join messages are on." : "Vanilla join messages are back.").withStyle(ChatFormatting.GREEN));
+		return okAdmin(ctx.getSource(), Component.literal(on ? "Own join messages are on." : "Vanilla join messages are back.").withStyle(ChatFormatting.GREEN));
 	}
 
 	private static int toggleTab(CommandContext<CommandSourceStack> ctx, boolean on) {
@@ -104,11 +106,6 @@ public final class ChatDisplayCommands {
 		boolean saved = TownhallCommand.saveConfig(ctx.getSource());
 		TabList.update(ctx.getSource().getServer());
 		if (!saved) return 0;
-		return ok(ctx, Component.literal(on ? "Tab list header/footer on." : "Tab list header/footer off.").withStyle(ChatFormatting.GREEN));
-	}
-
-	private static int ok(CommandContext<CommandSourceStack> ctx, Component message) {
-		ctx.getSource().sendSuccess(() -> message, true);
-		return 1;
+		return okAdmin(ctx.getSource(), Component.literal(on ? "Tab list header/footer on." : "Tab list header/footer off.").withStyle(ChatFormatting.GREEN));
 	}
 }
