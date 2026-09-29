@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
@@ -241,6 +242,11 @@ public final class TownhallConfig {
 			this.z = z;
 			this.yaw = yaw;
 			this.pitch = pitch;
+		}
+
+		/** Where the player stands and looks. */
+		public static Spot of(ServerPlayer player) {
+			return new Spot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
 		}
 	}
 

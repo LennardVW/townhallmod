@@ -63,6 +63,11 @@ public final class Afk {
 		SEEN.remove(player.getUUID());
 	}
 
+	/** Server stopped (no DISCONNECT for everyone then): forget all players. */
+	public static void reset() {
+		SEEN.clear();
+	}
+
 	/** Once per second: compare look direction and position with the last check. */
 	public static void check(MinecraftServer server, long now) {
 		long limit = TownhallMod.CONFIG.get().afkMinutes * 60_000L;

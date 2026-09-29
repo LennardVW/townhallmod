@@ -2,6 +2,13 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.14.2
+- `/townhall debug <spieler>` zeigt jetzt auch, unter welchem Namen die Rückkehr-Position gespeichert wurde.
+- `/townhall status` zeigt die nichtssagende Zeile „Persistent storage: loaded“ nicht mehr.
+- Schlägt ein Teleport zu einem Ort fehl, steht der Grund jetzt wirklich im Server-Log (die Meldung verweist darauf).
+- Die Mod verlangt jetzt ausdrücklich Fabric API 0.161.0 oder neuer. Mit einer älteren Version startet der Server mit einer klaren Meldung statt mit einem Fehler mitten im Spiel.
+- Intern: Tests laufen bei jedem Durchgang mit frischer Welt und Config und prüfen die genauen Meldungen; doppelter Code in den Befehlen zusammengefasst; Speicher wird beim Server-Stopp aufgeräumt; automatischer Build auf GitHub; Lizenz liegt im Jar.
+
 ## 1.14.0
 - Neu: `/townhall sleep <0-100>` legt fest, wie viel Prozent der Spieler schlafen müssen, damit die Nacht vorbei ist. Bei 50 % und 4 Spielern in der Oberwelt reichen 2. Spieler in anderen Welten (Rathaus, Flatworld) zählen nicht mit. `/townhall sleep` zeigt den Wert.
 - Fix: In einer Welt mit fester Nacht oder festem Gewitter kann man nicht mehr schlafen. Vorher wurde dadurch die Zeit in allen Welten vorgespult und der Regen überall beendet. Das Bett setzt weiter den Spawnpunkt.
