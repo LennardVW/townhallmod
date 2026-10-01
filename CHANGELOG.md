@@ -2,6 +2,64 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.15.0
+
+- Stadtrollen: Bürgermeister, Polizei, Händler, Architekt und Wahlhelfer sind vorgegeben. Admins können eigene Rollen erstellen, Rechte begrenzen und Mitgliedschaften auch offline vergeben.
+- Feste Verwaltungsbefehle behalten ihre Rechte, wenn ein bestehender Ort denselben Befehlsnamen hat. Der Ortsbefehl wird übersprungen und kann mit `/location set` umbenannt werden.
+- Polizei darf Spieler mit Grund und begrenzter Online-Zeit in ein vom Admin festgelegtes Gefängnis schicken und daraus freilassen. OP, Creative und WorldEdit werden durch Stadtrollen nicht vergeben.
+- Rathauswahlen mit registrierten Vanilla-Büchern, einer Stimme je UUID, Wahlraum und reservierter Urne. Wahlhelfer zählen anonyme, schreibgeschützte Buchkopien von Hand; Admins veröffentlichen vollständige Ergebnisse. Archiv und Ergebnis bleiben nach Freigabe des Urnenfasses erhalten.
+- Spielerläden: echte Smaragde oder Diamanten, Warenbestand, Offline-Einnahmen, Inventarprüfung und ausdrücklich protokollierte Admin-Wiederherstellung. Handel ist im Creative-Modus gesperrt.
+- Grundstücke sind optional und zunächst aus. Admins vergeben Eigentümer, Mitbauer und örtliche Rollenrechte. Freie Flächen folgen den bisherigen Weltregeln. Townhalls WorldEdit-Freigabe für Nicht-Admins wird bei aktivierten Grundstücken gesperrt.
+- Begrenztes Änderungsprotokoll für erfolgreiche synchrone Blockänderungen und Verwaltungsaktionen. Admins können nach Block, Umgebung oder Spieler suchen. Chat und Stimmeninhalte werden nicht protokolliert; Rollback und vollständige asynchrone WorldEdit-Erfassung sind nicht enthalten.
+- Neue Regressionstests für Rollen, Polizeistrafen, Grundstücke, Buch-Doppelabgabe, Handzählung, Läden, Inventar- und Berechtigungsfehler sowie Protokoll. Anleitung: [docs/STADT.md](docs/STADT.md).
+
+## 1.14.2
+- `/townhall debug <spieler>` zeigt jetzt auch, unter welchem Namen die Rückkehr-Position gespeichert wurde.
+- `/townhall status` zeigt die nichtssagende Zeile „Persistent storage: loaded“ nicht mehr.
+- Schlägt ein Teleport zu einem Ort fehl, steht der Grund jetzt wirklich im Server-Log (die Meldung verweist darauf).
+- Die Mod verlangt jetzt ausdrücklich Fabric API 0.161.0 oder neuer. Mit einer älteren Version startet der Server mit einer klaren Meldung statt mit einem Fehler mitten im Spiel.
+- Intern: Tests laufen bei jedem Durchgang mit frischer Welt und Config und prüfen die genauen Meldungen; doppelter Code in den Befehlen zusammengefasst; Speicher wird beim Server-Stopp aufgeräumt; automatischer Build auf GitHub; Lizenz liegt im Jar.
+
+## 1.14.1
+- Schneller: Die Suche nach einem sicheren Platz beim Zurückkehren (`return`) braucht im schlimmsten Fall (Radius 16, kein sicherer Platz) etwa 3 ms statt 37 ms. Gefunden wird genau derselbe Platz wie vorher.
+- Schneller: `/playtime top` sortiert nicht mehr alle Spieler, sondern merkt sich nur die besten 10 (10 000 Spieler: 0,04 ms statt 1,5 ms).
+- Schneller: Farbcodes in Texten (`&6` usw.), Tab-Liste, WorldEdit-Rechte für Nicht-Builder, Schlüssel-Suche im Inventar und Türen, wenn es keine abgeschlossenen gibt.
+- Die Prüfung einmal pro Sekunde (Gefängnis, Zeitstrafen) schaut nur noch auf Spieler, die wirklich festgehalten werden oder einen Timer haben. AFK/Spielzeit läuft eine halbe Sekunde versetzt dazu, damit nicht beides im selben Tick passiert.
+- Zeitstrafen und Spielzeit zählen mit einer Uhr, die sich nicht verstellen lässt: Wird die Systemzeit geändert, geht keine Zeit verloren und es kommt keine dazu.
+- Die Spielzeit-Datei wird nur noch als geändert markiert, wenn sich wirklich etwas geändert hat (z. B. nicht, wenn alle AFK sind).
+
+## 1.14.0
+- Neu: `/townhall sleep <0-100>` legt fest, wie viel Prozent der Spieler schlafen müssen, damit die Nacht vorbei ist. Bei 50 % und 4 Spielern in der Oberwelt reichen 2. Spieler in anderen Welten (Rathaus, Flatworld) zählen nicht mit. `/townhall sleep` zeigt den Wert.
+- Fix: In einer Welt mit fester Nacht oder festem Gewitter kann man nicht mehr schlafen. Vorher wurde dadurch die Zeit in allen Welten vorgespult und der Regen überall beendet. Das Bett setzt weiter den Spawnpunkt.
+- Fix: Wird die Wetter-Regel einer Welt aufgehoben, bekommen Spieler in anderen Welten nicht mehr deren Regen angezeigt.
+- Fix: `mobs false` gilt jetzt auch für Tiere in neu erzeugten Chunks, Trial-Spawner, Skelettpferd-Fallen, Piglins aus Netherportalen und Überfälle (Raids).
+- Fix: `explosions false` verhindert auch das Feuer von Explosionen. Windkugeln drücken dort wieder Knöpfe und öffnen Türen.
+- Fix: Wer nur geschoben wird (Wasser, Kolben, Mobs, andere Spieler), wird trotzdem AFK. Jeder Befehl zählt als aktiv, nicht nur `/me` und `/say`.
+- Fix: Beutetabellen und Bedingungen mit Uhrzeit (`time_check`) sehen in einer Welt mit fester Zeit diese Zeit.
+- Fix: `/joinmessage set <spieler> -` bedeutet jetzt „keine Join-Nachricht“ statt eines „-“ im Chat.
+- Fix: `/tablist off` löscht Kopf- und Fußzeile nur einmal und schickt danach nichts mehr, sodass Tab-Listen anderer Mods stehen bleiben.
+
+## 1.13.0
+- `/playtime`, `/playtime <spieler>` und `/playtime top` zeigen den Nicknamen (mit Farben). Mit der Maus darüber sieht man den echten Namen.
+- Befehle verstehen Nicknamen: `/tp Bürgermeister`, `/msg Bürgermeister`, `/playtime Bürgermeister`, `/nick reset Bürgermeister` usw. Groß- und Kleinschreibung und Farben zählen nicht. Der echte Name eines Spielers geht immer vor.
+- Die Befehlsvervollständigung (Tab) schlägt Nicknamen vor statt leerer Einträge.
+- Jeden Nicknamen gibt es nur einmal. `/nick set` lehnt auch Namen ab, die ein anderer Spieler wirklich trägt, auch wenn er offline ist.
+- Kommt später ein neuer Spieler, der so heißt wie ein Nickname, bekommen Admins einen Hinweis.
+- Fix: `/team join` oder `/team leave` bei einem Spieler mit Nicknamen warf andere Spieler vom Server.
+- Fix: Nach `/nick set` sahen Spieler in anderen Welten ein „Geisterbild“ des Spielers.
+- Fix: Eigene Anzeigetexte von Scoreboard-Punkten gingen nach `/nick set` verloren.
+- Fix: Nach einer Namensänderung bei Mojang konnte ein anderer Spieler falsche Punkte in der Tab-Liste bekommen.
+- Die Tab-Liste liest Nicknamen schneller.
+
+## 1.12.2
+- Fix: Türen abschließen geht nur noch dort, wo man bauen darf. Fremde öffentliche Türen in Welten mit `build false` bleiben offen.
+- Fix: Abgeschlossene Türen lassen sich nicht mehr umgehen: Block darunter abbauen, Kolben, Explosionen und Zombies zerstören sie nicht. Eine neue Tür erbt kein altes Schloss.
+- Fix: `/townhall reload` nimmt entfernten Bauern sofort Creative weg.
+- Fix: `build false` schützt jetzt auch Schilder, Blumentöpfe, Verstärker, Komparatoren, Notenblöcke, Tageslichtsensoren, Farbstoff, Scheren, Pinsel und Ähnliches, und Pfeile anderer Spieler zerstören keine Rahmen, Bilder oder Krüge mehr.
+- Fix: Mit Werkzeug oder Eimer in der Hand lassen sich Türen, Kisten und Knöpfe in `build false`-Welten wieder benutzen.
+- Fix: Bauer dürfen keine CraftScripts, kein `setnbt` und kein Schematic-Löschen in WorldEdit.
+- Fix: `/key new` und `/key copy` haben 10 Sekunden Wartezeit, und Schlüssel lassen sich nicht mehr verbauen (Fallenkiste, Armbrust).
+
 ## 1.12.1
 - Fix: Befehle auf Schildern laufen mit den Rechten des Spielers. Ein Schild mit `/townhall return` holt keine Gefangenen mehr heraus, öffnet keine Admin-Orte und umgeht weder Wartezeit noch die Befehlssperre.
 - Fix: Ist `config/townhall.json` fehlerhaft (beim Start oder nach `/townhall reload`), überschreiben Befehle die Datei nicht mehr, sondern melden „Config not saved“. Schreibfehler werden ebenfalls gemeldet statt „gespeichert“.

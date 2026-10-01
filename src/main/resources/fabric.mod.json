@@ -3,8 +3,12 @@
 	"id": "townhall",
 	"version": "${version}",
 	"name": "Townhall",
-	"description": "Server-side /townhall command: travel to the Townhall world and back to exactly where you were. Vanilla clients can join.",
+	"description": "Server-side only: config-defined locations like a Townhall or prison with return to the exact spot, per-world rules, builders, rules onboarding, nicknames, door keys, AFK and play time, join messages and tab list. Vanilla clients can join.",
 	"authors": ["Lennard"],
+	"contact": {
+		"sources": "https://github.com/LennardVW/townhallmod",
+		"issues": "https://github.com/LennardVW/townhallmod/issues"
+	},
 	"license": "MIT",
 	"environment": "*",
 	"entrypoints": {
@@ -15,6 +19,6 @@
 		"fabricloader": ">=0.19.5",
 		"minecraft": "~26.3",
 		"java": ">=25",
-		"fabric-api": "*"
+		"fabric-api": ">=0.161.0+26.3"
 	}
 }

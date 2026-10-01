@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ public final class TownhallConfig {
 	public int afkMinutes = 5;
 	public JoinMessages joinMessages = new JoinMessages();
 	public TabList tabList = new TabList();
+	public dev.townhall.city.CitySettings city = new dev.townhall.city.CitySettings();
 
 	/** Own join/leave messages; {player} = name (nickname if set), &-colors. Empty text = no message. */
 	public static final class JoinMessages {
@@ -242,6 +244,11 @@ public final class TownhallConfig {
 			this.yaw = yaw;
 			this.pitch = pitch;
 		}
+
+		/** Where the player stands and looks. */
+		public static Spot of(ServerPlayer player) {
+			return new Spot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+		}
 	}
 
 	private static Map<String, Location> defaultLocations() {
@@ -388,6 +395,8 @@ public final class TownhallConfig {
 		if (joinMessages == null || joinMessages.players == null) errors.add("joinMessages is missing");
 		if (tabList == null || tabList.header == null || tabList.footer == null) errors.add("tabList.header/footer must be lists");
 		if (afkMinutes < 0) errors.add("afkMinutes must be >= 0");
+		if (city == null) errors.add("city is missing");
+		else city.validate(errors);
 		return errors;
 	}
 

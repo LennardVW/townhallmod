@@ -28,6 +28,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
+import net.minecraft.world.level.gamerules.GameRules;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,6 +39,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
+
+import static dev.townhall.command.Feedback.fail;
+import static dev.townhall.command.Feedback.ok;
 
 /**
  * One root command per configured location, e.g. /townhall and /gefaengnis:
@@ -71,6 +75,11 @@ public final class TownhallCommand {
 		}
 	}
 
+	/** Server stopped: the cooldown is in memory only and starts fresh with the next server. */
+	public static void reset() {
+		LAST_USE.clear();
+	}
+
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 		for (TownhallConfig.Location location : TownhallMod.CONFIG.get().locations.values()) addRoot(dispatcher, location.command);
 	}
@@ -79,6 +88,11 @@ public final class TownhallCommand {
 	public static void refreshCommands(MinecraftServer server) {
 		CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
 		for (TownhallConfig.Location location : TownhallMod.CONFIG.get().locations.values()) addRoot(dispatcher, location.command);
+		sendCommandsToAll(server);
+	}
+
+	/** Sends every online player their command tree again (after roots or requirements changed). */
+	public static void sendCommandsToAll(MinecraftServer server) {
 		server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
 	}
 
@@ -153,6 +167,8 @@ public final class TownhallCommand {
 				.then(Commands.literal("status").requires(op).executes(TownhallCommand::status))
 				.then(Commands.literal("afktime").requires(op)
 						.then(Commands.argument("minutes", IntegerArgumentType.integer(0, 1440)).executes(ActivityCommands::setAfkTime)))
+				.then(Commands.literal("sleep").requires(op).executes(TownhallCommand::showSleep)
+						.then(Commands.argument("percent", IntegerArgumentType.integer(0, 100)).executes(TownhallCommand::setSleep)))
 				.then(Commands.literal("deathsintab").requires(op)
 						.then(Commands.literal("on").executes(ctx -> setDeathsInTab(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setDeathsInTab(ctx, false))))
@@ -169,10 +185,10 @@ public final class TownhallCommand {
 		ServerPlayer player = requirePlayer(ctx.getSource());
 		if (player == null) return 0;
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		boolean operator = isOperatorSelf(ctx.getSource());
-		if (config.location(id).orElseThrow().adminOnly && !operator) return fail(ctx.getSource(), "Only operators can go there.");
-		if (onCooldown(ctx.getSource(), player)) return 0;
 		TownhallConfig.Location location = location(id);
+		boolean operator = isOperatorSelf(ctx.getSource());
+		if (location.adminOnly && !operator) return fail(ctx.getSource(), "Only operators can go there.");
+		if (onCooldown(ctx.getSource(), player)) return 0;
 		return switch (TeleportService.sendTo(player, id, config, operator, false, Optional.empty())) {
 			case SENT -> ok(ctx.getSource(), location.arrivedMessage);
 			case ALREADY_THERE -> fail(ctx.getSource(), location.alreadyHereMessage.formatted(location.command));
@@ -243,7 +259,7 @@ public final class TownhallCommand {
 		if (!player.level().dimension().equals(location.dimensionKey())) {
 			return fail(ctx.getSource(), "Stand in " + location.dimension + " to set the spawn of " + config.displayName(id) + ".");
 		}
-		location.spawn = new TownhallConfig.Spot(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+		location.spawn = TownhallConfig.Spot.of(player);
 		TownhallMod.LOGGER.info("{} set the spawn of {} to {}", player.getPlainTextName(), id, formatSpot(location.spawn));
 		if (!saveConfig(ctx.getSource())) return 0;
 		return ok(ctx.getSource(), "Spawn of " + config.displayName(id) + " set to " + formatSpot(location.spawn) + ".");
@@ -292,6 +308,33 @@ public final class TownhallCommand {
 		dev.townhall.display.DeathsInTab.apply(ctx.getSource().getServer());
 		if (!saveConfig(ctx.getSource())) return 0;
 		return ok(ctx.getSource(), on ? "Deaths are shown in the tab list." : "Deaths are no longer shown in the tab list.");
+	}
+
+	/**
+	 * sleep [0-100]: vanilla game rule players_sleeping_percentage (saved with the world, not in our config).
+	 * Vanilla counts per world: sleepers in a world against the players in that same world.
+	 */
+	private static int setSleep(CommandContext<CommandSourceStack> ctx) {
+		int percent = IntegerArgumentType.getInteger(ctx, "percent");
+		var server = ctx.getSource().getServer();
+		server.getGameRules().set(GameRules.PLAYERS_SLEEPING_PERCENTAGE, percent, server); // like /gamerule: notifies and updates
+		TownhallMod.LOGGER.info("Sleeping percentage set to {}", percent);
+		return showSleep(ctx);
+	}
+
+	private static int showSleep(CommandContext<CommandSourceStack> ctx) {
+		var server = ctx.getSource().getServer();
+		int percent = server.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
+		return ok(ctx.getSource(), "Sleeping: " + percent + "% of the players in a world must sleep to skip the night. " + sleepExample(server, percent));
+	}
+
+	private static String sleepExample(MinecraftServer server, int percent) {
+		String others = "Players in other worlds (e.g. the townhall) don't count.";
+		if (percent > 100) return "Nobody can skip the night. " + others;
+		long players = server.overworld().players().stream().filter(p -> !p.isSpectator()).count();
+		if (players == 0) return "Nobody is in the overworld right now. " + others;
+		long needed = Math.max(1, (long) Math.ceil(players * percent / 100.0)); // like vanilla SleepStatus.sleepersNeeded
+		return "Overworld now: " + needed + " of " + players + " must sleep. " + others;
 	}
 
 	private static int showWorldRules(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -390,6 +433,8 @@ public final class TownhallCommand {
 		if (!missing.isEmpty()) msg.append(" Not loaded: ").append(String.join(", ", missing)).append(". Loaded: ").append(TownhallMod.loadedDimensions(server)).append('.');
 		refreshCommands(server);
 		dev.townhall.display.DeathsInTab.apply(server);
+		// Builders removed in the file lose creative and WorldEdit right away, not only on their next world change.
+		server.getPlayerList().getPlayers().forEach(dev.townhall.protection.Protection::enforceBuilderMode);
 		ctx.getSource().sendSuccess(() -> Component.literal(msg.toString()).withStyle(missing.isEmpty() ? ChatFormatting.GREEN : ChatFormatting.YELLOW), true);
 		return 1;
 	}
@@ -409,7 +454,6 @@ public final class TownhallCommand {
 				.append(line("Confined / timed players", activeList(server, storage)))
 				.append(line("Config", (TownhallMod.CONFIG.loadedFromFile() ? "loaded from " + TownhallMod.CONFIG.path().getFileName() : "built-in defaults (file invalid)")
 						+ (TownhallMod.CONFIG.canSave() ? "" : ", file has errors: changes are NOT saved until /townhall reload works")))
-				.append(line("Persistent storage", "loaded"))
 				.append(line("Loaded dimensions", TownhallMod.loadedDimensions(server)));
 		ctx.getSource().sendSuccess(() -> text, false);
 		return 1;
@@ -432,7 +476,8 @@ public final class TownhallCommand {
 				text.append(line("Stored Return Position", loc.dimension().identifier().toString()))
 						.append(line("X", fmt(loc.x()))).append(line("Y", fmt(loc.y()))).append(line("Z", fmt(loc.z())))
 						.append(line("Yaw", fmt(loc.yaw()))).append(line("Pitch", fmt(loc.pitch())))
-						.append(line("Stored At", Instant.ofEpochMilli(loc.timestamp()).toString()));
+						.append(line("Stored At", Instant.ofEpochMilli(loc.timestamp()).toString()
+								+ loc.playerName().map(name -> " (as " + name + ")").orElse("")));
 			}
 			ctx.getSource().sendSuccess(() -> text, false);
 		}
@@ -484,7 +529,7 @@ public final class TownhallCommand {
 		return ConfinementService.confinedMessage(config, ReturnPositionStorage.get(player.level().getServer()).state(player.getUUID()));
 	}
 
-	private static String activeList(net.minecraft.server.MinecraftServer server, ReturnPositionStorage storage) {
+	private static String activeList(MinecraftServer server, ReturnPositionStorage storage) {
 		List<String> entries = storage.activePlayers().stream().map(id -> {
 			PlayerState st = storage.state(id);
 			String name = server.services().nameToIdCache().get(id).map(NameAndId::name).orElse(id.toString());
@@ -526,7 +571,10 @@ public final class TownhallCommand {
 
 	/** Saves the config; if that fails, tells the admin (the change is live but not written) and returns false. */
 	public static boolean saveConfig(CommandSourceStack source) {
-		if (TownhallMod.CONFIG.save()) return true;
+		if (TownhallMod.CONFIG.save()) {
+            dev.townhall.audit.AuditLog.record(source, "config.save", "Serverkonfiguration gespeichert");
+            return true;
+        }
 		source.sendFailure(Component.literal(ConfigManager.NOT_SAVED));
 		return false;
 	}
@@ -550,16 +598,6 @@ public final class TownhallCommand {
 		}
 		LAST_USE.put(player.getUUID(), now);
 		return false;
-	}
-
-	private static int ok(CommandSourceStack source, String message) {
-		source.sendSuccess(() -> Component.literal(message).withStyle(ChatFormatting.GREEN), false);
-		return 1;
-	}
-
-	private static int fail(CommandSourceStack source, String message) {
-		source.sendFailure(Component.literal(message));
-		return 0;
 	}
 
 	private static Component line(String key, String value) {

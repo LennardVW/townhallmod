@@ -26,8 +26,15 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 java {
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_townhall" }
+	}
 }
 
 fabricApi {
@@ -38,4 +45,21 @@ fabricApi {
 		enableClientGameTests = false
 		eula = true
 	}
+}
+
+// Benchmark GameTest (PerfBench): only registered and run with ./gradlew runGameTest -Dtownhall.bench=true
+def benchOnly = providers.systemProperty("townhall.benchOnly").map { it == "true" }.getOrElse(false)
+def benchOn = benchOnly || providers.systemProperty("townhall.bench").map { it == "true" }.getOrElse(false)
+processGametestResources {
+	inputs.property "bench", benchOn
+	inputs.property "benchOnly", benchOnly
+	filesMatching("fabric.mod.json") {
+		filter { line ->
+			if (benchOnly && line.contains('"fabric-gametest"')) return '		"fabric-gametest": ["dev.townhall.test.PerfBench"]'
+			return benchOn && line.contains('"fabric-gametest"') ? line.replace('"]', '", "dev.townhall.test.PerfBench"]') : line
+		}
+	}
+}
+tasks.named("runGameTest") {
+	if (benchOn) jvmArgs("-Dtownhall.bench=true")
 }

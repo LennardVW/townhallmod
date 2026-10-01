@@ -26,16 +26,23 @@ public final class ConfinementService {
 	private static final long MAX_STEP_MILLIS = 5_000;
 
 	private static int ticks;
-	private static long lastRun;
+	/** System.nanoTime of the last pass (monotonic: a changed system clock can't add or eat time); 0 = no pass yet. */
+	private static long lastRunNanos;
 
 	private ConfinementService() {}
+
+	/** Fresh schedule for a (re)started server; called by ActivityService on SERVER_STARTED. */
+	public static void reset() {
+		ticks = 0;
+		lastRunNanos = 0;
+	}
 
 	public static void onServerTick(MinecraftServer server) {
 		if (++ticks < INTERVAL_TICKS) return;
 		ticks = 0;
-		long now = System.currentTimeMillis();
-		long elapsed = lastRun == 0 ? 0 : Math.min(now - lastRun, MAX_STEP_MILLIS);
-		lastRun = now;
+		long now = System.nanoTime();
+		long elapsed = lastRunNanos == 0 ? 0 : Math.clamp((now - lastRunNanos) / 1_000_000, 0, MAX_STEP_MILLIS);
+		lastRunNanos = now;
 		check(server, elapsed);
 		Onboarding.check(server);
 	}
