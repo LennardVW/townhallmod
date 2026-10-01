@@ -115,6 +115,23 @@ public class PerfBench {
 		out.add(time("Afk.check(server) - 1x per second, 60 players", 20_000, () -> Afk.check(server, clock[0] += 1)));
 		out.add(time("TabList.update(server) - every 2 s, 60 players", 2_000, () -> TabList.update(server)));
 
+		// City hot paths: bounded lookups, no terrain generation or actual item transactions in the measurement.
+		var plots = new dev.townhall.city.PlotStorage();
+		for (int i = 0; i < 2000; i++) plots.put("p" + i, new dev.townhall.city.Plot("minecraft:overworld", i * 32, 0, i * 32 + 15, 15,
+				Optional.of(viewer.getUUID().toString()), List.of(), List.of(), true));
+		BlockPos plotHit = new BlockPos(32000, 64, 8), plotMiss = new BlockPos(32016, 64, 8);
+		out.add(time("PlotStorage.at(hit, 2000 plots)", 500_000, () -> sink = plots.at("minecraft:overworld", plotHit)));
+		out.add(time("PlotStorage.at(miss, 2000 plots)", 500_000, () -> sink = plots.at("minecraft:overworld", plotMiss)));
+		out.add(time("PlotStorage encode to NBT (2000 plots)", 3, 10, () -> sink = dev.townhall.city.PlotStorage.CODEC.encodeStart(NbtOps.INSTANCE, plots).getOrThrow()));
+		var audit = new dev.townhall.audit.AuditStorage();
+		UUID actor = viewer.getUUID();
+		Identifier auditDim = level.dimension().identifier();
+		for (int i = 0; i < 50_000; i++) audit.append(i, actor, "Bench", "block.place", Optional.of(auditDim), Optional.of(plotHit), "air", "stone", "", 50_000);
+		out.add(time("AuditStorage.append(full ring, 50000 entries)", 100_000, () -> sink = audit.append(1, actor, "Bench", "block.place", Optional.of(auditDim), Optional.of(plotHit), "air", "stone", "", 50_000)));
+		out.add(time("AuditStorage.at(miss, scans 50000 entries)", 5, 25, () -> sink = audit.at(auditDim, plotMiss, 10)));
+		out.add(time("AuditStorage encode to NBT (50000 entries)", 1, 3, () -> sink = dev.townhall.audit.AuditStorage.CODEC.encodeStart(NbtOps.INSTANCE, audit).getOrThrow()));
+		out.add(time("CivicSites.protectedAt(unreserved block)", 500_000, () -> sink = dev.townhall.city.CivicSites.protectedAt(level, plotMiss)));
+
 		// F8 Text.of
 		out.add(time("Text.of(\"&6Hello &lWorld &rand more text\")", 1_000_000, () -> sink = Text.of("&6Hello &lWorld &rand more text")));
 

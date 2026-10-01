@@ -2,6 +2,17 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.15.0
+
+- Stadtrollen: Bürgermeister, Polizei, Händler, Architekt und Wahlhelfer sind vorgegeben. Admins können eigene Rollen erstellen, Rechte begrenzen und Mitgliedschaften auch offline vergeben.
+- Feste Verwaltungsbefehle behalten ihre Rechte, wenn ein bestehender Ort denselben Befehlsnamen hat. Der Ortsbefehl wird übersprungen und kann mit `/location set` umbenannt werden.
+- Polizei darf Spieler mit Grund und begrenzter Online-Zeit in ein vom Admin festgelegtes Gefängnis schicken und daraus freilassen. OP, Creative und WorldEdit werden durch Stadtrollen nicht vergeben.
+- Rathauswahlen mit registrierten Vanilla-Büchern, einer Stimme je UUID, Wahlraum und reservierter Urne. Wahlhelfer zählen anonyme, schreibgeschützte Buchkopien von Hand; Admins veröffentlichen vollständige Ergebnisse. Archiv und Ergebnis bleiben nach Freigabe des Urnenfasses erhalten.
+- Spielerläden: echte Smaragde oder Diamanten, Warenbestand, Offline-Einnahmen, Inventarprüfung und ausdrücklich protokollierte Admin-Wiederherstellung. Handel ist im Creative-Modus gesperrt.
+- Grundstücke sind optional und zunächst aus. Admins vergeben Eigentümer, Mitbauer und örtliche Rollenrechte. Freie Flächen folgen den bisherigen Weltregeln. Townhalls WorldEdit-Freigabe für Nicht-Admins wird bei aktivierten Grundstücken gesperrt.
+- Begrenztes Änderungsprotokoll für erfolgreiche synchrone Blockänderungen und Verwaltungsaktionen. Admins können nach Block, Umgebung oder Spieler suchen. Chat und Stimmeninhalte werden nicht protokolliert; Rollback und vollständige asynchrone WorldEdit-Erfassung sind nicht enthalten.
+- Neue Regressionstests für Rollen, Polizeistrafen, Grundstücke, Buch-Doppelabgabe, Handzählung, Läden, Inventar- und Berechtigungsfehler sowie Protokoll. Anleitung: [docs/STADT.md](docs/STADT.md).
+
 ## 1.14.2
 - `/townhall debug <spieler>` zeigt jetzt auch, unter welchem Namen die Rückkehr-Position gespeichert wurde.
 - `/townhall status` zeigt die nichtssagende Zeile „Persistent storage: loaded“ nicht mehr.

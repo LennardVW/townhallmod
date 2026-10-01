@@ -16,6 +16,15 @@ abstract class BlockItemMixin {
 
 	@Inject(method = "place", at = @At("HEAD"), cancellable = true)
 	private void townhall$buildProtection(BlockPlaceContext ctx, CallbackInfoReturnable<InteractionResult> cir) {
-		if (ctx.getPlayer() instanceof ServerPlayer player && !Protection.mayChangeWorld(player)) cir.setReturnValue(InteractionResult.FAIL);
+		if (!(ctx.getPlayer() instanceof ServerPlayer player)) return;
+		if (!Protection.mayChangeWorld(player, player.level(), ctx.getClickedPos())) {
+			cir.setReturnValue(InteractionResult.FAIL);
+			return;
+		}
+		// A bed occupies a second column: checking only its foot would let outsiders place its head in a claim.
+		if (((BlockItem)(Object)this).getBlock() instanceof net.minecraft.world.level.block.AbstractBedBlock
+				&& !Protection.mayChangeWorld(player, player.level(), ctx.getClickedPos().relative(ctx.getHorizontalDirection()))) {
+			cir.setReturnValue(InteractionResult.FAIL);
+		}
 	}
 }

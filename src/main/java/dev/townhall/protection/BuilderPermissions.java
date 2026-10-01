@@ -28,6 +28,11 @@ public final class BuilderPermissions {
 	}
 
 	private static <T> T handle(PermissionContext context, PermissionNode<T> node) {
+		if (dev.townhall.TownhallMod.CONFIG.get().city.claimsEnabled
+				&& context.get(PermissionContext.ENTITY) instanceof ServerPlayer protectedPlayer
+				&& !dev.townhall.TownhallMod.isOperator(protectedPlayer.permissions()) && worldEditPath(node.key()) != null) {
+			try { return node.cast(Boolean.FALSE); } catch (RuntimeException notBoolean) { return null; }
+		}
 		// Cheap builder check first: for everyone else (almost every request) no string work at all.
 		if (!(context.get(PermissionContext.ENTITY) instanceof ServerPlayer player) || !Protection.isBuilderHere(player)) return null;
 		String path = worldEditPath(node.key());

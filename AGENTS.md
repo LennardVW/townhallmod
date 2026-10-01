@@ -28,13 +28,13 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`; keep this list complete whe
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 80 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 136 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
-./gradlew runGameTest -Dtownhall.bench=true   # + PerfBench (80 tests); numbers in build/run/gameTest/perf-bench.txt
+./gradlew runGameTest -Dtownhall.benchOnly=true # isolated PerfBench, 60 players; build/run/gameTest/perf-bench.txt
 ```
 
 CI: `.github/workflows/build.yml` runs `./gradlew build` (with the GameTests) on every push and pull request and uploads the jar as an artifact.
-The benchmark (`PerfBench`) is only registered with `-Dtownhall.bench=true`: `build.gradle` then adds it to the gametest entrypoints (`processGametestResources`) and passes the property to the game JVM. Compare numbers only between runs on the same machine; run it before and after a change.
+The benchmark (`PerfBench`) is registered with `-Dtownhall.bench=true` alongside the tests, or in isolation with `-Dtownhall.benchOnly=true`: `build.gradle` then adds it to the gametest entrypoints (`processGametestResources`) and passes the property to the game JVM. Compare numbers only between runs on the same machine; run it before and after a change.
 
 ## Files
 
@@ -206,3 +206,27 @@ new feature → minor (1.3.0 → 1.4.0), bug fix only → patch (1.3.0 → 1.3.1
 - Tests that change overworld rules (`WorldRulesGameTests.withRules`) do it synchronously and restore in the same tick, because `fixedTimePerWorld`/`fixedWeatherPerWorld` run in parallel on the overworld. Environment attributes are cached per tick: call `environmentAttributes().invalidateTickCache()` + `updateSkyBrightness()` to see a change at once. The GameTest server has `spawn_mobs` off; mob tests set it on temporarily.
 - Lazily loaded mixin targets only the GameTests exercise: `TrialSpawner`, `NetherPortalBlock`, `Raids`/`Raid`, `TimeCheck`, `ServerExplosion` (the dedicated-server boot doesn't load them).
 - Not covered: real vanilla client, real death/respawn (the test calls `keepConfined` directly), difficulty display on a real client.
+
+
+## Azubi city (1.15.0)
+
+User/admin guide: `docs/STADT.md`. Accepted scope: `docs/city-design.md`.
+
+- `city/`: `CitySettings` is the backwards-compatible `city` config section. `CityAccess.isAdmin` uses the actual player's permissions, even when a sign/forged command source has GAMEMASTER. Console can administer. Always use this guard for new admin roots.
+- `RoleStorage` saves definitions + UUID memberships; defaults are only created for a new store. Removing a default role is intentional and must survive reload. Capabilities are whitelisted by `RoleService`: city.announce, police.jail, police.release, shop.manage, election.count. No vanilla permission levels/wildcards/Creative/WorldEdit are granted.
+- `RoleService.decorate` adds the highest-priority role prefix to chat/tab names, preserving nicknames. `refresh` updates command trees and tab display names after role changes. The nickname above the head remains unchanged.
+- `PoliceCommand` permits only the configured non-escapable prison, an admin-configured duration limit (default 15 online minutes), and release from that same prison. It preserves active sentences and refuses op targets. Use TeleportService/ReturnPositionStorage, never parallel teleport state.
+- `PlotStorage` has a per-dimension chunk index. Claims cover the entire build height, reject overlap, are limited to 256x256 per plot, 2000 plots and 32000 indexed chunks. Codec validation rejects malformed bounds before building the index. `claimsEnabled` defaults false; unclaimed areas fall back to world rules.
+- `Protection.mayBuildAt` must be called with the actual affected block, not merely the player's position. Owner/trusted UUIDs and explicitly allowed role IDs can build; claim permissions do not give Creative. Civic marker blocks are immutable until administrative release, including for ops.
+- `CivicSites` combines election/shop reservations. `Civic*Mixin` classes cover container access, foreign chest merging, piston boundaries, fluid boundaries, fire destruction, explosion blocks/fire, hopper extraction/insertion/dropper paths, and copper golems. This is not a generic interception of every mod's direct world writes. Keep filtered explosion lists mutable: vanilla shuffles them.
+- Active claims deny Townhall's Fabric WorldEdit permission grant to non-ops. There is no fine-grained WorldEdit integration and external permissions/direct writes are outside this guarantee.
+- `election/`: native `ElectionStorage`, registered writable/signed vanilla books, token UUID per voter UUID. Reissuing invalidates the previous token; failed inventory insertion does not. Only pages are archived; voter UUID set is separate, archive order is randomly inserted, no issuance/submission auditing. Manual helper reading is only after close. Helpers replace tally values; publishing is op-only, requires all candidates + invalid count and exact sum. `releaseurn` preserves historical data and frees the marker after close/cancel/publish. CLOSED/PUBLISHED codecs allow released urns.
+- Register election/shop UseBlock callbacks BEFORE `Protection.register()`, as a valid vote may occur in a protected election room. Handlers/services must check onboarding, confinement and spectators themselves. `ElectionUrnContainerMixin` denies all urn menus; `ElectionUrnMenuMixin` closes a pre-existing menu. Archive copies remove submitted metadata, executable components and author/title.
+- `shop/`: one offer per reserved empty barrel, physical diamond/emerald currency, copied exact-component inventory simulation before committing goods/payment + SavedData. Owner UUID offline proceeds; trader capability only required for offers/stock. Owners keep withdrawal rights after role revocation. Admin recovery is explicit, logged, into the executing admin's own inventory. No deleting/changing owners with nonempty stock/earnings. Protect marker reservations even while shops are disabled/missing.
+- Reject civic custom data recursively inside item containers, with depth/count bounds. Keys and ballots cannot be crafted into other items (ShopCraftingMixin/ShopCrafterMixin chain with existing key guards). Shop buy/offer/stock use the authoritative gameMode controller and reject Creative; shared builder inventories still let Creative-origin goods reach Survival, so do not claim anti-laundering/provenance.
+- `audit/`: native bounded SavedData ring, default 50000, min 100/max 100000; query radius <=64, output <=100. Level.setBlock is attributed only inside server-thread actor scope; placement/break buffered scope commits on success, command scope tracks successful synchronous writes. No command transcripts, chat, ballots or NBT inventory snapshots. Async/deferred/direct chunk writes cannot reliably be attributed. No rollback.
+- Storage: `<world>/data/townhall/{roles,plots,elections,shops,audit}.dat`, autosave + normal shutdown. Native player saves and SavedData aren't a hard-crash atomic transaction; disclose it.
+
+New tests: `CityGameTests`, `ElectionGameTests`, `ShopGameTests`, `AuditGameTests`. Fixtures restore config/op/storage synchronously. Command raycasts use partial tick 1 (current view); mock players have old rotation/position defaults at tick 0. Police tests use unique nicknames because all mocks share a real name and cross-world mock selectors cannot always find a just-teleported player.
+
+Delivery: complete build and GameTests, optional benchmark, dedicated server boot; copy the distributable jar to Downloads, attach one PR, do not auto-merge. No Co-Author or generated-by attribution. A real client click/book-edit session remains a separate manual acceptance check.

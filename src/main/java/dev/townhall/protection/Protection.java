@@ -1,6 +1,11 @@
 package dev.townhall.protection;
 
 import dev.townhall.TownhallMod;
+import dev.townhall.city.CivicSites;
+import dev.townhall.city.PlotService;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import dev.townhall.dimension.DimensionSettings;
 import dev.townhall.onboarding.Onboarding;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -72,33 +77,42 @@ public final class Protection {
 
 	public static void register() {
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register(Protection::allowDamage);
-		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> !(player instanceof ServerPlayer sp) || mayChangeWorld(sp));
+		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> !(player instanceof ServerPlayer sp) || mayChangeWorld(sp, (ServerLevel) level, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			if (Onboarding.isRestricted(sp)) return deniedOnboarding(sp);
-			if (mayBuild(sp)) return InteractionResult.PASS;
+			if (!CivicSites.canUse(sp, (ServerLevel) level, hit.getBlockPos()) || !PlotService.canUse(sp, (ServerLevel) level, hit.getBlockPos())) return denied(sp);
+			if (mayBuildAt(sp, (ServerLevel) level, hit.getBlockPos())) return InteractionResult.PASS;
 			BlockState target = level.getBlockState(hit.getBlockPos());
 			if (isProtectedBlock(target)) return denied(sp);
 			// Doors, chests, buttons ... handle the click themselves before the held item is used (ServerPlayerGameMode.useItemOn),
 			// so they stay usable with a tool or bucket in hand. Sneaking skips the block, then the item rule applies.
 			if (!sp.isSecondaryUseActive() && isUsableBlock(target, level, hit.getBlockPos())) return InteractionResult.PASS;
-			return changesWorld(player.getItemInHand(hand)) ? denied(sp) : InteractionResult.PASS;
+			if (changesWorld(player.getItemInHand(hand)) && (!mayBuildAt(sp, (ServerLevel) level, hit.getBlockPos())
+					|| !mayBuildAt(sp, (ServerLevel) level, hit.getBlockPos().relative(hit.getDirection())))) return denied(sp);
+			return InteractionResult.PASS;
 		});
 		UseItemCallback.EVENT.register((player, level, hand) -> {
 			if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			if (Onboarding.isRestricted(sp)) return deniedOnboarding(sp);
 			ItemStack stack = player.getItemInHand(hand);
-			return (stack.getItem() instanceof BucketItem || stack.getItem() instanceof BoatItem) && !mayBuild(sp) ? denied(sp) : InteractionResult.PASS;
+			if (stack.getItem() instanceof BucketItem || stack.getItem() instanceof BoatItem) {
+				HitResult hit = sp.pick(5.0, 1f, true);
+				if (hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK) {
+					if (!mayBuildAt(sp, (ServerLevel) level, block.getBlockPos()) || !mayBuildAt(sp, (ServerLevel) level, block.getBlockPos().relative(block.getDirection()))) return denied(sp);
+				} else if (!mayBuildAt(sp, (ServerLevel) level, sp.blockPosition())) return denied(sp);
+			}
+			return InteractionResult.PASS;
 		});
 		AttackEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
 			if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			if (Onboarding.isRestricted(sp)) return deniedOnboarding(sp);
-			return isWorldObject(entity) && !mayBuild(sp) ? denied(sp) : InteractionResult.PASS;
+			return isWorldObject(entity) && !mayBuildAt(sp, (ServerLevel) level, entity.blockPosition()) ? denied(sp) : InteractionResult.PASS;
 		});
 		UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> {
 			if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			if (Onboarding.isRestricted(sp)) return deniedOnboarding(sp);
-			return (entity instanceof ItemFrame || entity instanceof ArmorStand) && !mayBuild(sp) ? denied(sp) : InteractionResult.PASS;
+			return (entity instanceof ItemFrame || entity instanceof ArmorStand) && !mayBuildAt(sp, (ServerLevel) level, entity.blockPosition()) ? denied(sp) : InteractionResult.PASS;
 		});
 		ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, sender, params) -> {
 			if (!Onboarding.isRestricted(sender)) return true;
@@ -131,12 +145,29 @@ public final class Protection {
 
 	/** Projectile hitting an entity: world objects (frames, paintings, armor stands, boats ...) only for owners who may build there. */
 	public static boolean projectileMayHit(Projectile projectile, Entity target) {
-		return !isWorldObject(target) || projectileMayChangeBlocks(projectile);
+		return !isWorldObject(target) || projectileMayChangeBlocks(projectile, target.blockPosition());
 	}
 
 	/** Projectile hitting a block (pots, chorus, dripstone, TNT ...): only for owners who may build there. No player owner: vanilla. */
 	public static boolean projectileMayChangeBlocks(Projectile projectile) {
-		return !(projectile.getOwner() instanceof ServerPlayer owner) || mayBuildIn(owner, projectile.level().dimension());
+		return projectileMayChangeBlocks(projectile, projectile.blockPosition());
+	}
+
+	public static boolean projectileMayChangeBlocks(Projectile projectile, BlockPos impact) {
+		if (!(projectile.level() instanceof ServerLevel level)) return true;
+		if (CivicSites.protectedAt(level, impact)) return false;
+		if (projectile.getOwner() instanceof ServerPlayer owner) return mayBuildAt(owner, level, impact);
+		return !PlotService.protects(level, impact);
+	}
+
+	public static boolean mayBuildAt(ServerPlayer player, ServerLevel level, BlockPos pos) {
+		return !CivicSites.protectedAt(level, pos) && PlotService.canBuild(player, level, pos);
+	}
+
+	public static boolean mayChangeWorld(ServerPlayer player, ServerLevel level, BlockPos pos) {
+		if (Onboarding.isRestricted(player)) { Onboarding.remind(player); return false; }
+		if (mayBuildAt(player, level, pos)) return true;
+		denied(player); return false;
 	}
 
 	/** Set on players who switched to creative with /builder creative. */

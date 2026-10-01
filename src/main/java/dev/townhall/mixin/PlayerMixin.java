@@ -21,7 +21,7 @@ abstract class PlayerMixin {
 
 	@ModifyExpressionValue(method = "getDisplayName", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;getName()Lnet/minecraft/network/chat/Component;"))
 	private Component townhall$nickname(Component name) {
-		return (Object) this instanceof ServerPlayer player ? Nicknames.of(player.getUUID()).orElse(name) : name;
+		return (Object) this instanceof ServerPlayer player ? dev.townhall.city.RoleService.decorate(player, Nicknames.of(player.getUUID()).orElse(name), false) : name;
 	}
 
 	@Inject(method = "causeFoodExhaustion", at = @At("HEAD"), cancellable = true)

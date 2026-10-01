@@ -571,7 +571,10 @@ public final class TownhallCommand {
 
 	/** Saves the config; if that fails, tells the admin (the change is live but not written) and returns false. */
 	public static boolean saveConfig(CommandSourceStack source) {
-		if (TownhallMod.CONFIG.save()) return true;
+		if (TownhallMod.CONFIG.save()) {
+            dev.townhall.audit.AuditLog.record(source, "config.save", "Serverkonfiguration gespeichert");
+            return true;
+        }
 		source.sendFailure(Component.literal(ConfigManager.NOT_SAVED));
 		return false;
 	}

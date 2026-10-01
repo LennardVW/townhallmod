@@ -215,21 +215,23 @@ public final class Keys {
 
 		if (lock.isEmpty()) {
 			if (heldKey.isEmpty()) return InteractionResult.PASS;
-			if (!Protection.mayBuild(player)) {
+			if (!Protection.mayBuildAt(player, level, lower)) {
 				// No build rights here (public door, build:false world): the door just works like a normal door.
 				player.sendOverlayMessage(Component.literal("You can't lock doors here.").withStyle(ChatFormatting.RED));
 				return InteractionResult.PASS;
 			}
 			DoorLocks.get(level.getServer()).put(level.dimension(), lower, new DoorLocks.Lock(heldKey.get().toString(), keyName(held),
 					player.getUUID().toString(), player.getGameProfile().name()));
+			dev.townhall.audit.AuditLog.record(level.getServer(), player, "door.lock", "Tür " + lower.toShortString());
 			TownhallMod.LOGGER.info("{} locked the door at {} in {} with key {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier(), keyName(held));
 			player.sendOverlayMessage(Component.literal("Door locked with key \"" + keyName(held) + "\".").withStyle(ChatFormatting.GREEN));
 			resync(player, level, lower);
 			return InteractionResult.SUCCESS;
 		}
 
-		if (player.isShiftKeyDown() && heldKey.filter(lock.get().key()::equals).isPresent()) {
+		if (player.isShiftKeyDown() && heldKey.filter(lock.get().key()::equals).isPresent() && Protection.mayBuildAt(player, level, lower)) {
 			DoorLocks.get(level.getServer()).remove(level.dimension(), lower);
+			dev.townhall.audit.AuditLog.record(level.getServer(), player, "door.unlock", "Tür " + lower.toShortString());
 			TownhallMod.LOGGER.info("{} unlocked the door at {} in {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier());
 			player.sendOverlayMessage(Component.literal("Door is no longer locked.").withStyle(ChatFormatting.YELLOW));
 			resync(player, level, lower);

@@ -37,6 +37,9 @@ public final class Afk {
 	/** Tab list name: nickname or real name, plus [AFK]. Null = vanilla (real name, no nickname). */
 	public static Component tabName(ServerPlayer player) {
 		Component base = Nicknames.of(player.getUUID()).orElse(null);
+		if (!dev.townhall.city.RoleService.roles(player).isEmpty() && TownhallMod.CONFIG.get().city.rolesInTab) {
+			base = dev.townhall.city.RoleService.decorate(player, base == null ? Component.literal(player.getGameProfile().name()) : base, true);
+		}
 		if (!isAfk(player.getUUID())) return base;
 		return Component.empty().append(base == null ? Component.literal(player.getGameProfile().name()) : base)
 				.append(Component.literal(" [AFK]").withStyle(ChatFormatting.GRAY));

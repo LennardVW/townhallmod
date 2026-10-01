@@ -6,9 +6,15 @@ Townhall fasst die Dinge zusammen, für die man sonst mehrere Plugins bräuchte:
 
 Die Mod läuft nur auf dem Server. Spieler joinen mit einem ganz normalen Minecraft-Client und müssen nichts installieren.
 
-Aktuelle Version: **1.14.2**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: **1.15.0**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
 
 ---
+
+## Azubi-Stadt ab 1.15.0
+
+Frei erstellbare Stadtrollen mit Bürgermeister, Polizei, Händler, Architekt und Wahlhelfer; eine Buchwahl im Rathaus mit manueller Auszählung; Spielerläden mit Diamanten oder Smaragden; optionaler Grundstücksschutz und ein Änderungsprotokoll.
+
+**[Zur vollständigen Stadt-Anleitung mit allen Befehlen und Beispielen](docs/STADT.md).** Grundstücke sind zunächst ausgeschaltet. Einrichtung und Rechtevergabe erfolgen durch Admins. [Build-, Test- und Messprotokoll](docs/VALIDIERUNG-1.15.0.md).
 
 ## Inhalt
 
@@ -56,6 +62,11 @@ Aktuelle Version: **1.14.2**. Was sich wann geändert hat, steht in [CHANGELOG.m
 | Nicknamen | Admins vergeben Nicknamen (bis 32 Zeichen, mit Farben). Sie erscheinen im Chat, in der Tab-Liste und über dem Kopf. |
 | AFK und Spielzeit | `[AFK]` in der Tab-Liste nach 5 Minuten Inaktivität, `/playtime` mit Top-10-Bestenliste. |
 | Anzeige | Eigene Join-, Leave- und Erstjoin-Nachrichten, Kopf- und Fußzeile der Tab-Liste, rote Todeszahl neben jedem Namen. |
+| Stadtrollen | Grundrollen und eigene Rollen, Offline-Zuweisung, Anzeige in Chat und Tab; eingeschränkte Polizeibefehle. |
+| Buchwahl | Wahlraum und Urne, ein registriertes Buch je Stimme, anonyme Archivierung, Handzählung durch Wahlhelfer. |
+| Spielerläden | Ein Angebot pro Laden, echte Smaragde/Diamanten, Bestände und Einnahmen für Offline-Verkäufer. |
+| Grundstücke | Optionaler Schutz mit Eigentümern, Mitbauern und ausdrücklich zugelassenen Rollen. |
+| Protokoll | Admin-Abfragen zu erfolgreichen Block- und Verwaltungsänderungen; begrenzte Speicherung. |
 | Onboarding | Neue Spieler sehen beim ersten Join Begrüßung, Tutorial und Regeln und müssen die Regeln akzeptieren, bevor sie spielen können. |
 
 Alle Admin-Einstellungen lassen sich im Spiel per Befehl ändern. Sie gelten sofort, ohne `/reload` und ohne Neustart.
@@ -442,6 +453,11 @@ Beispiel für Weltregeln in der Datei:
 | `<welt>/data/townhall/nicknames.dat` | Nicknamen |
 | `<welt>/data/townhall/playtime.dat` | Spielzeiten |
 | `<welt>/data/townhall/door_locks.dat` | Abgeschlossene Türen |
+| `<welt>/data/townhall/roles.dat` | Stadtrollen und Mitgliedschaften |
+| `<welt>/data/townhall/plots.dat` | Optionale Grundstücke |
+| `<welt>/data/townhall/elections.dat` | Wahlen, Buchseiten und Handzählung |
+| `<welt>/data/townhall/shops.dat` | Läden, Bestand und Einnahmen |
+| `<welt>/data/townhall/audit.dat` | Änderungsprotokoll |
 
 Alle Spielerdaten sind nach UUID gespeichert, nicht nach Namen. Ein Namenswechsel bei Mojang ändert also nichts. Die Dateien werden zusammen mit der Welt gespeichert (Autosave und beim Stoppen). Wer die Welt und den Ordner `config/` sichert, hat alles gesichert.
 
@@ -471,6 +487,8 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 
 **Alle Spieler:** `/townhall`, `/townhall return`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`
 
+**Stadtfunktionen:** Alle Befehle für Rollen, Polizei, Wahlen, Läden, Grundstücke und Protokoll stehen in [docs/STADT.md](docs/STADT.md).
+
 **Bauer:** `/builder creative`, `/builder survival`, dazu WorldEdit in der eigenen Bauwelt
 
 **Admins:**
@@ -490,8 +508,9 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 
 ## Bekannte Grenzen
 
+- **Stadtfunktionen:** Wahlbücher und Waren liegen in Serverarchiven; Fässer markieren nur die Orte. WorldEdit wird für Nicht-Admins bei aktivierten Grundstücken durch Townhall gesperrt. Das Protokoll erfasst keine asynchronen oder direkten Chunk-Schreibvorgänge vollständig. Einzelheiten stehen in der [Stadt-Anleitung](docs/STADT.md).
 - **Gemeinsames Inventar:** Bauer können Creative-Items in andere Welten mitnehmen. Getrennte Inventare pro Welt gibt es noch nicht.
-- **Abgeschlossene Türen:** Wer an einer Stelle bauen darf, kann dort auch Türen anderer Spieler abschließen, solange sie noch offen sind. Grundstücke gibt es nicht.
+- **Abgeschlossene Türen:** Wer an einer Stelle bauen darf, kann dort auch Türen anderer Spieler abschließen, solange sie noch offen sind. Bei aktiviertem Grundstücksschutz sind zum Verknüpfen oder Entfernen eines Schlosses Baurechte an der Tür erforderlich.
 - **Nicknamen:** Bei Spielern mit Nicknamen fehlen über dem Kopf Farbe, Präfix und Einstellungen von Scoreboard-Teams (`/team`); die Teams selbst funktionieren. Nicknamen mit Leerzeichen oder Zeichen wie `!` schlägt die Tab-Taste nicht vor. Nicknamen mit Leerzeichen gehen nur bei Befehlen für Online-Spieler (in Anführungszeichen).
 - **Schwierigkeit pro Welt:** Einige wenige Stellen im Spiel lesen weiterhin die Server-Schwierigkeit, etwa Endermiten aus Enderperlen oder Piglins aus Netherportalen.
 - **Wetter:** Welten ohne Wetter (Nether, End) können kein festes Wetter bekommen.
@@ -513,7 +532,7 @@ Die fertige Jar liegt danach in `build/libs/townhall-<version>.jar`. Java 25 mus
 | Befehl | Zweck |
 |---|---|
 | `./gradlew build` | Kompilieren, alle Tests ausführen, Jar bauen |
-| `./gradlew runGameTest` | Nur die 36 GameTests auf einem echten Testserver ausführen |
+| `./gradlew runGameTest` | Die GameTests auf einem echten Testserver ausführen |
 | `./gradlew runServer` | Entwicklungsserver in `run/` starten (vorher `run/eula.txt` mit `eula=true` anlegen) |
 
 **Aufbau des Codes** (`src/main/java/dev/townhall/`)
@@ -531,6 +550,10 @@ Die fertige Jar liegt danach in `build/libs/townhall-<version>.jar`. Java 25 mus
 | `display` | Join-Nachrichten, Tab-Liste, Todeszahl |
 | `onboarding` | Begrüßung und Regeln beim ersten Join |
 | `storage` | Gespeicherte Spielerzustände |
+| `city` | Stadtrollen, Polizeirechte und optionale Grundstücke |
+| `election` | Registrierung, anonyme Buchwahl, manuelle Ergebnisse |
+| `shop` | Warenbestand und Transaktionen mit Vanilla-Gegenständen |
+| `audit` | Begrenztes Änderungsprotokoll und Abfragen |
 | `mixin` | Eingriffe in Minecraft, wo es kein Fabric-Event gibt |
 
 Technische Details für Entwickler und KI-Agenten stehen in [AGENTS.md](AGENTS.md). Die wichtigsten Regeln daraus:

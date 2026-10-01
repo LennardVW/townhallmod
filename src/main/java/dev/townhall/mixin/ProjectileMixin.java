@@ -27,6 +27,6 @@ abstract class ProjectileMixin {
 
 	@WrapOperation(method = "onHitBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/state/BlockState;onProjectileHit(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/phys/BlockHitResult;Lnet/minecraft/world/entity/projectile/Projectile;)V"))
 	private void townhall$protectBlocks(BlockState state, Level level, BlockState same, BlockHitResult hit, Projectile projectile, Operation<Void> original) {
-		if (Protection.projectileMayChangeBlocks(projectile)) original.call(state, level, same, hit, projectile);
+		if (Protection.projectileMayChangeBlocks(projectile, hit.getBlockPos())) original.call(state, level, same, hit, projectile);
 	}
 }

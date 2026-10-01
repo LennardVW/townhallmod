@@ -1,6 +1,19 @@
 package dev.townhall;
 
 import dev.townhall.command.BuilderCommand;
+import dev.townhall.city.RoleCommand;
+import dev.townhall.city.RoleStorage;
+import dev.townhall.city.PlotCommand;
+import dev.townhall.city.PlotStorage;
+import dev.townhall.city.CityCommand;
+import dev.townhall.city.PoliceCommand;
+import dev.townhall.audit.AuditLog;
+import dev.townhall.audit.AuditCommands;
+import dev.townhall.election.ElectionService;
+import dev.townhall.election.ElectionStorage;
+import dev.townhall.shop.ShopCommands;
+import dev.townhall.shop.ShopService;
+import dev.townhall.shop.ShopData;
 import dev.townhall.activity.ActivityService;
 import dev.townhall.activity.Afk;
 import dev.townhall.command.ActivityCommands;
@@ -50,14 +63,7 @@ public class TownhallMod implements ModInitializer {
 		CONFIG.loadOrCreate();
 		DimensionSettings.rebuild(CONFIG.get());
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-			TownhallCommand.register(dispatcher);
-			RulesCommand.register(dispatcher);
-			LocationCommand.register(dispatcher);
-			BuilderCommand.register(dispatcher);
-			NickCommand.register(dispatcher);
-			KeyCommand.register(dispatcher);
-			ActivityCommands.register(dispatcher);
-			ChatDisplayCommands.register(dispatcher);
+			registerCommands(dispatcher);
 		});
 		ServerLifecycleEvents.SERVER_STARTED.register(TownhallMod::onServerStarted);
 		ServerLifecycleEvents.SERVER_STOPPED.register(TownhallMod::onServerStopped);
@@ -91,6 +97,9 @@ public class TownhallMod implements ModInitializer {
 			DimensionSettings.onEnter(player);
 			Protection.enforceBuilderMode(player);
 		});
+		ElectionService.register();
+		ShopService.registerEvents();
+		AuditLog.register();
 		Protection.register();
 		BuilderPermissions.register();
 		Keys.register();
@@ -101,9 +110,34 @@ public class TownhallMod implements ModInitializer {
 		LOGGER.info("Townhall initialized with locations {}", CONFIG.get().locations.keySet());
 	}
 
+	/** The same registration order is used at startup and in command collision regression tests. */
+	public static void registerCommands(com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher) {
+		// Fixed commands own their names before configurable location roots are added. Otherwise Brigadier merges
+		// a location named "role", for example, into the administration command and keeps its location requirement.
+		RulesCommand.register(dispatcher);
+		LocationCommand.register(dispatcher);
+		BuilderCommand.register(dispatcher);
+		NickCommand.register(dispatcher);
+		KeyCommand.register(dispatcher);
+		ActivityCommands.register(dispatcher);
+		ChatDisplayCommands.register(dispatcher);
+		RoleCommand.register(dispatcher);
+		PlotCommand.register(dispatcher);
+		CityCommand.register(dispatcher);
+		PoliceCommand.register(dispatcher);
+		ElectionService.register(dispatcher);
+		ShopCommands.register(dispatcher);
+		AuditCommands.register(dispatcher);
+		TownhallCommand.register(dispatcher);
+	}
+
 	/** Other mods may add dimensions late, so this only reports; commands look the dimension up again every time. */
 	private static void onServerStarted(MinecraftServer server) {
 		TownhallConfig config = CONFIG.get();
+		RoleStorage.get(server);
+		PlotStorage.get(server);
+		ElectionStorage.get(server);
+		ShopData.get(server);
 		DeathsInTab.apply(server);
 		Nicknames.load(server);
 		config.locations.forEach((id, loc) -> {
@@ -127,6 +161,8 @@ public class TownhallMod implements ModInitializer {
 		KeyCommand.reset();
 		Onboarding.reset();
 		Afk.reset();
+		PlotCommand.reset();
+		AuditLog.reset();
 	}
 
 	/** Operator = has the permission level from commands.operatorPermissionLevel. Operators are never confined. */
