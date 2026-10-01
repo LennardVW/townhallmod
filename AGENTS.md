@@ -28,7 +28,7 @@ Mixins (`townhall.mixins.json`, `defaultRequire: 1`; keep this list complete whe
 
 ```bash
 ./gradlew build          # compiles + runs all GameTests, jar in build/libs/
-./gradlew runGameTest    # only the GameTests (expect "All 136 required tests passed")
+./gradlew runGameTest    # only the GameTests (expect "All 149 required tests passed")
 ./gradlew runServer      # dev server in run/ (needs run/eula.txt)
 ./gradlew runGameTest -Dtownhall.benchOnly=true # isolated PerfBench, 60 players; build/run/gameTest/perf-bench.txt
 ```
@@ -156,6 +156,9 @@ The search box is at most (2·16+1)² × (2·16+1) positions, loaded through `le
 - `/builder creative` sets the `townhall.builder_creative` tag. `Protection.enforceBuilderMode` (join, world change, respawn, after `remove`) puts non-op players back to survival if they have the tag or are a builder anywhere but not here, and resends builders' command tree.
 - `/townhall reload` calls `enforceBuilderMode` for all online players (builders removed in the file).
 - WorldEdit asks `FabricPermissionsProvider` first (Fabric permission API, `worldedit.a.b` → `worldedit:a.b`), then lucko v0, then op level. Our handler answers only for builders in their world, `null` otherwise.
+- Since 1.16.0, `BuilderSchematicCommandMixin` widens only the native setblock/fill root predicates. Never widen GAMEMASTER globally. `BuilderSchematics` checks the actor's own builder/world/Creative state, onboarding, confinement, complete bounded footprint, civic/plot protection and Fabric BEFORE break vetoes before native mutations. Nonempty BlockInput NBT and GameMasterBlock are denied; console/actual ops retain native behavior.
+- `BuilderSetBlockMixin`/`BuilderFillMixin` guard the actual command implementations, including an elevated sign/forged source. `BlockInputTagAccessor` reads the private tag. Limit: 32768 target blocks, loaded chunks only; validation scans per command, never per tick.
+- `BuilderPasteNetworkMixin` works inside the server-thread unsigned/signed command methods, after vanilla packet validation. It exempts only direct setblock/fill requests from eligible Creative builders, up to 64 per connection per server tick. Excess requests are cancelled before execution and charged by vanilla; ordinary commands and chat are unchanged. No Servux/custom packet grants. User guide: `docs/LITEMATICA.md`.
 - World rules `mobs` (NaturalSpawner.spawnForChunk + spawnMobsForChunkGeneration, BaseSpawner.serverTick, TrialSpawner.canSpawnInLevel/spawnMob, ServerLevel.tickCustomSpawners, skeleton horse in ServerLevel.tickThunder, NetherPortalBlock.randomTick, Raids.createOrExtendRaid → null, Raid.tick → stop), `fire` (FireBlock.tick removes the fire), `explosions` (ServerExplosion.interactWithBlocks list → empty only for DESTROY/DESTROY_WITH_DECAY, so wind charges still trigger buttons/doors; createFire list → empty; both `@ModifyVariable`, chaining with other mods and LockedDoorExplosionMixin), `leafDecay` (LeavesBlock.randomTick).
 - GameProfileArgument rejects `@s` ("selector includes entities"); tests use `@p[distance=..0.5]` there (see Testing).
 

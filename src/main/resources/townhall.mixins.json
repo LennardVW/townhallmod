@@ -5,6 +5,11 @@
 	"mixins": [
 		"BlockItemMixin",
 		"CommandsMixin",
+		"BuilderSchematicCommandMixin",
+		"BuilderPasteNetworkMixin",
+		"BuilderSetBlockMixin",
+		"BuilderFillMixin",
+		"BlockInputTagAccessor",
 		"EnvironmentAttributeSystemMixin",
 		"LevelMixin",
 		"PlayerMixin",
