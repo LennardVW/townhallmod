@@ -934,6 +934,129 @@ public class TownhallGameTests {
 		h.succeed();
 	}
 
+	private static void keyTestDoor(GameTestHelper h, BlockPos lower, net.minecraft.world.level.block.DoorBlock door) {
+		h.setBlock(lower.below(), Blocks.STONE);
+		h.setBlock(lower, door.defaultBlockState());
+		h.setBlock(lower.above(), door.defaultBlockState().setValue(net.minecraft.world.level.block.DoorBlock.HALF,
+				net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
+	}
+
+	@GameTest
+	public void adminKeyLocksAllDoorTypes(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var admin = h.makeMockServerPlayerInLevel();
+		var stranger = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		boolean onboarding = TownhallMod.CONFIG.get().onboarding.enabled;
+		TownhallMod.CONFIG.get().onboarding.enabled = false;
+		server.getPlayerList().op(admin.nameAndId(), Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.empty());
+		try {
+			run(admin, "key admin");
+			var item = java.util.stream.IntStream.range(0, admin.getInventory().getContainerSize())
+					.mapToObj(admin.getInventory()::getItem).filter(dev.townhall.key.Keys::isAdminKey).findFirst().orElseThrow();
+			h.assertTrue(dev.townhall.key.Keys.keyId(item).isEmpty(), "old-format admin item still has no ordinary key UUID");
+			admin.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, item.copy());
+			int doors = 0;
+			for (var block : net.minecraft.core.registries.BuiltInRegistries.BLOCK) {
+				if (!(block instanceof net.minecraft.world.level.block.DoorBlock door)) continue;
+				keyTestDoor(h, lower, door);
+				h.assertTrue(useDoor(h, admin, lower.above()).consumesAction(), "admin links upper half of " + block);
+				var lock = dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow();
+				h.assertTrue(lock.keyName().equals("Admin Key"), "admin lock has a readable name");
+				h.assertTrue(useDoor(h, stranger, lower) == net.minecraft.world.InteractionResult.FAIL, "no key cannot use admin-locked " + block);
+				h.assertTrue(useDoor(h, admin, lower) == net.minecraft.world.InteractionResult.PASS, "admin keeps access to " + block);
+				var encoded = dev.townhall.key.DoorLocks.CODEC.encodeStart(NbtOps.INSTANCE, dev.townhall.key.DoorLocks.get(server)).getOrThrow();
+				var restored = dev.townhall.key.DoorLocks.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow();
+				h.assertTrue(restored.get(h.getLevel().dimension(), h.absolutePos(lower)).orElseThrow().equals(lock), "admin lock survives storage round-trip");
+				dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+				h.setBlock(lower.above(), Blocks.AIR);
+				h.setBlock(lower, Blocks.AIR);
+				doors++;
+			}
+			h.assertTrue(doors > 2, "tested vanilla wooden, metal and copper door variants");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+			server.getPlayerList().deop(admin.nameAndId());
+			TownhallMod.CONFIG.get().onboarding.enabled = onboarding;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void adminKeyCannotBeUsedWithoutOperatorRights(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var player = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		boolean onboarding = TownhallMod.CONFIG.get().onboarding.enabled;
+		TownhallMod.CONFIG.get().onboarding.enabled = false;
+		try {
+			keyTestDoor(h, lower, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.adminKey());
+			useDoor(h, player, lower);
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).isEmpty(), "non-operator cannot lock with an admin key");
+			server.getPlayerList().op(player.nameAndId(), Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.empty());
+			h.assertTrue(useDoor(h, player, lower).consumesAction(), "same item works after real op grant");
+			var lock = dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow();
+			server.getPlayerList().deop(player.nameAndId());
+			player.setShiftKeyDown(true);
+			h.assertTrue(useDoor(h, player, lower) == net.minecraft.world.InteractionResult.FAIL, "revoked op cannot open or remove admin lock");
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow().equals(lock), "revocation leaves lock intact");
+			var fake = dev.townhall.key.Keys.newKey("Not an admin");
+			var data = new net.minecraft.nbt.CompoundTag();
+			data.putString("townhall_key", lock.keyId());
+			net.minecraft.world.item.component.CustomData.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, fake, data);
+			player.getInventory().add(fake);
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, fake.copy());
+			h.assertTrue(useDoor(h, player, lower) == net.minecraft.world.InteractionResult.FAIL, "reserved-ID normal key cannot remove admin lock even when sneaking");
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow().equals(lock), "forged reserved ID leaves admin lock intact");
+			h.assertFalse(dev.townhall.key.Keys.mayOpen(player, lock), "ordinary key with reserved admin UUID never grants admin access");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+			server.getPlayerList().deop(player.nameAndId());
+			TownhallMod.CONFIG.get().onboarding.enabled = onboarding;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void adminKeyPreservesOriginalOwnersLock(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var owner = h.makeMockServerPlayerInLevel();
+		var admin = h.makeMockServerPlayerInLevel();
+		var stranger = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		boolean onboarding = TownhallMod.CONFIG.get().onboarding.enabled;
+		TownhallMod.CONFIG.get().onboarding.enabled = false;
+		try {
+			keyTestDoor(h, lower, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			owner.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.newKey("Haus"));
+			server.getPlayerList().op(owner.nameAndId(), Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.empty());
+			h.assertTrue(useDoor(h, owner, lower).consumesAction(), "owner creates ordinary lock");
+			server.getPlayerList().deop(owner.nameAndId());
+			var lock = dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow();
+			admin.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.adminKey());
+			server.getPlayerList().op(admin.nameAndId(), Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.empty());
+			for (boolean sneaking : new boolean[]{false, true}) {
+				admin.setShiftKeyDown(sneaking);
+				h.assertTrue(useDoor(h, admin, lower) == net.minecraft.world.InteractionResult.PASS, "admin access never consumes/removes existing lock");
+				h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow().equals(lock), "original key, owner and name stay unchanged");
+				h.assertTrue(useDoor(h, owner, lower) == net.minecraft.world.InteractionResult.PASS, "original owner still uses original key");
+				h.assertTrue(useDoor(h, stranger, lower) == net.minecraft.world.InteractionResult.FAIL, "stranger never gains access");
+			}
+			admin.setShiftKeyDown(false);
+			admin.absSnapTo(h.absolutePos(lower).getX() + 0.5, h.absolutePos(lower).getY(), h.absolutePos(lower).getZ() + 2.5, 180f, 0f);
+			admin.setYHeadRot(180f); // mock head rotation is independent from body teleport rotation
+			var result = capture(admin.createCommandSourceStack(), "key unlock");
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).isEmpty(), "explicit admin unlock command still removes lock: " + result.messages + ", hit=" + admin.pick(5.0, 1f, false).getLocation() + ", eye=" + admin.getEyePosition());
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+			server.getPlayerList().deop(owner.nameAndId());
+			server.getPlayerList().deop(admin.nameAndId());
+			TownhallMod.CONFIG.get().onboarding.enabled = onboarding;
+		}
+		h.succeed();
+	}
+
 	@GameTest
 	public void afkAndPlaytime(GameTestHelper h) {
 		MinecraftServer server = h.getLevel().getServer();

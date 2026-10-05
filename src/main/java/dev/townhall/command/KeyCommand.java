@@ -35,7 +35,7 @@ import static dev.townhall.command.Feedback.ok;
  * /key new &lt;name&gt;        everyone: get a new key
  * /key copy [player]      everyone: copy of the key in your hand (for you or another player)
  * /key info               everyone: which key locks the door you look at
- * /key admin              operator: admin key that opens every door
+ * /key admin              operator: admin key that locks and opens every door
  * /key unlock             operator: remove the lock of the door you look at
  * </pre>
  */
@@ -106,7 +106,7 @@ public final class KeyCommand {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		give(player, Keys.adminKey());
 		TownhallMod.LOGGER.info("{} took an admin key", player.getPlainTextName());
-		return ok(ctx.getSource(), "Admin key: opens every locked door while you are an operator.");
+		return ok(ctx.getSource(), "Admin key: right-click to lock an unlinked door or open a locked door. Existing locks stay unchanged. Use /key unlock to remove a lock. Operators only.");
 	}
 
 	private static int info(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -130,7 +130,7 @@ public final class KeyCommand {
 
 	/** Lower half of the door the player looks at (5 blocks). */
 	private static Optional<BlockPos> lookedAtDoor(ServerPlayer player) {
-		HitResult hit = player.pick(5.0, 0f, false);
+		HitResult hit = player.pick(5.0, 1f, false);
 		if (!(hit instanceof BlockHitResult blockHit) || hit.getType() != HitResult.Type.BLOCK) return Optional.empty();
 		ServerLevel level = player.level();
 		BlockState state = level.getBlockState(blockHit.getBlockPos());

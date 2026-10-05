@@ -30,9 +30,9 @@ import java.util.UUID;
 
 /**
  * Door keys. A key is a tripwire hook with a key id in its custom data (vanilla item, so vanilla clients see it).
- * Right-click an unlinked door with a key: the door is linked to that key. Linked doors open only for players who
- * carry a key with the same id (copies share the id) or an operator holding the admin key. Sneak + right-click with
- * the key unlinks the door. Redstone and mobs can't open linked doors (DoorBlockMixin).
+ * Right-click an unlinked door with a normal key (or an operator-held admin key): the door is linked to that key.
+ * Linked doors open only for players who carry a key with the same id (copies share the id) or an operator holding the admin key. Sneak + right-click with
+ * the normal key unlinks the door; admin keys leave existing locks unchanged (use /key unlock explicitly). Redstone and mobs can't open linked doors (DoorBlockMixin).
  * Linking needs build rights at the door (Protection.mayBuild), so nobody locks public doors in build:false worlds.
  * A locked door can't be removed around the lock: it keeps standing without its support block (DoorBlockMixin),
  * pistons can't push or pop it (PistonStructureResolverMixin), explosions skip it (LockedDoorExplosionMixin), zombies can't break it
@@ -42,6 +42,8 @@ public final class Keys {
 
 	static final String KEY_TAG = "townhall_key";
 	static final String ADMIN_TAG = "townhall_admin_key";
+	/** Reserved persistent lock identity, never an ordinary key item. Old admin keys need no migration. */
+	private static final UUID ADMIN_LOCK_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
 	private Keys() {}
 
@@ -103,7 +105,8 @@ public final class Keys {
 		stack.set(DataComponents.CUSTOM_NAME, Component.literal("Admin Key").withStyle(s -> s.withColor(ChatFormatting.RED).withBold(true).withItalic(false)));
 		stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
 		stack.set(DataComponents.LORE, new ItemLore(List.of(
-				Component.literal("Opens every locked door (operators only).").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)))));
+				Component.literal("Locks and opens every door (operators only).").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)),
+				Component.literal("Keeps existing locks. Use /key unlock to remove one.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)))));
 		return stack;
 	}
 
@@ -201,7 +204,7 @@ public final class Keys {
 	}
 
 	public static boolean mayOpen(ServerPlayer player, DoorLocks.Lock lock) {
-		if (carriesKey(player, lock.key())) return true;
+		if (!lock.key().equals(ADMIN_LOCK_ID) && carriesKey(player, lock.key())) return true;
 		return TownhallMod.isOperator(player.permissions()) && player.getInventory().contains(Keys::isAdminKey);
 	}
 
@@ -210,7 +213,10 @@ public final class Keys {
 		if (!(state.getBlock() instanceof DoorBlock)) return InteractionResult.PASS;
 		BlockPos lower = lowerHalf(pos, state);
 		ItemStack held = player.getMainHandItem();
-		Optional<UUID> heldKey = keyId(held);
+		boolean heldAdmin = isAdminKey(held) && TownhallMod.isOperator(player.permissions());
+		Optional<UUID> heldKey = heldAdmin ? Optional.of(ADMIN_LOCK_ID)
+				: isAdminKey(held) ? Optional.empty() : keyId(held).filter(id -> !id.equals(ADMIN_LOCK_ID));
+		String heldName = heldAdmin ? "Admin Key" : keyName(held);
 		Optional<DoorLocks.Lock> lock = lockAt(level, lower);
 
 		if (lock.isEmpty()) {
@@ -220,16 +226,16 @@ public final class Keys {
 				player.sendOverlayMessage(Component.literal("You can't lock doors here.").withStyle(ChatFormatting.RED));
 				return InteractionResult.PASS;
 			}
-			DoorLocks.get(level.getServer()).put(level.dimension(), lower, new DoorLocks.Lock(heldKey.get().toString(), keyName(held),
+			DoorLocks.get(level.getServer()).put(level.dimension(), lower, new DoorLocks.Lock(heldKey.get().toString(), heldName,
 					player.getUUID().toString(), player.getGameProfile().name()));
 			dev.townhall.audit.AuditLog.record(level.getServer(), player, "door.lock", "Tür " + lower.toShortString());
-			TownhallMod.LOGGER.info("{} locked the door at {} in {} with key {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier(), keyName(held));
-			player.sendOverlayMessage(Component.literal("Door locked with key \"" + keyName(held) + "\".").withStyle(ChatFormatting.GREEN));
+			TownhallMod.LOGGER.info("{} locked the door at {} in {} with key {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier(), heldName);
+			player.sendOverlayMessage(Component.literal("Door locked with key \"" + heldName + "\".").withStyle(ChatFormatting.GREEN));
 			resync(player, level, lower);
 			return InteractionResult.SUCCESS;
 		}
 
-		if (player.isShiftKeyDown() && heldKey.filter(lock.get().key()::equals).isPresent() && Protection.mayBuildAt(player, level, lower)) {
+		if (player.isShiftKeyDown() && !heldAdmin && heldKey.filter(lock.get().key()::equals).isPresent() && Protection.mayBuildAt(player, level, lower)) {
 			DoorLocks.get(level.getServer()).remove(level.dimension(), lower);
 			dev.townhall.audit.AuditLog.record(level.getServer(), player, "door.unlock", "Tür " + lower.toShortString());
 			TownhallMod.LOGGER.info("{} unlocked the door at {} in {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier());

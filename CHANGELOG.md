@@ -2,6 +2,13 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.16.1 – Admin-Schlüssel können Türen abschließen
+
+- Der Generalschlüssel schließt jetzt freie Türen ab. Alte Admin-Schlüssel funktionieren weiterhin; nur echte Operatoren können sie verwenden.
+- Bei bereits abgeschlossenen Türen bleiben Schloss, Besitzer und ursprünglicher Hausschlüssel unverändert, auch bei Schleichen + Rechtsklick. Dauerhaft entfernen: `/key unlock`.
+- `/key info` und `/key unlock` verwenden die aktuelle Blickrichtung.
+- Zusätzliche Tests für alle Vanilla-Türvarianten, Speicherung, OP-Entzug und die weiterhin funktionierenden Hausschlüssel.
+
 ## 1.16.0 – Litematica für Bauhelfer
 
 - Das vorhandene `/builder`-Recht erlaubt `/setblock` und `/fill` im Creative-Modus, jeweils in der freigegebenen Dimension. Damit funktioniert Litematicas Command-Paste ohne OP.
