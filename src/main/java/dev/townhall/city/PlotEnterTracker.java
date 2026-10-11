@@ -33,7 +33,9 @@ public final class PlotEnterTracker {
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			BlockPos pos = player.blockPosition();
 			if (pos.equals(LAST_POS.put(player.getUUID(),pos))) continue;
-			send(player,update(player));
+			Result r = update(player);
+			send(player,r);
+			notifyOwners(server,player,r);
 		}
 	}
 
@@ -97,6 +99,26 @@ public final class PlotEnterTracker {
 		player.connection.send(new ClientboundSetTitleTextPacket(Text.of(t[0])));
 	}
 
+	private static final Map<String,Long> NOTIFIED = new HashMap<>();   // visitor|plot -> last chat note
+	private static final long NOTIFY_MILLIS = 60_000;
+
+	/** Chat line for the online owners and co-owners when a non-member walks onto their plot (once a minute per visitor and plot). */
+	static void notifyOwners(MinecraftServer server, ServerPlayer visitor, Result r) {
+		if (r.kind() != Kind.ENTER || r.plot() == null || r.plot().owner().isEmpty()) return;
+		UUID v = visitor.getUUID(); Plot p = r.plot();
+		if (p.isOwner(v) || p.isManager(v) || p.trusted().contains(v.toString())) return;
+		long now = System.currentTimeMillis(); String key = v + "|" + r.id();
+		Long last = NOTIFIED.get(key); if (last != null && now - last < NOTIFY_MILLIS) return;
+		NOTIFIED.put(key,now);
+		List<String> owners = new ArrayList<>(); p.owner().ifPresent(owners::add); owners.addAll(p.coOwners());
+		for (String o : owners) {
+			try {
+				ServerPlayer owner = server.getPlayerList().getPlayer(UUID.fromString(o));
+				if (owner != null) owner.sendSystemMessage(Text.of("§e" + visitor.getDisplayName().getString() + " §7hat dein Grundstück §e" + r.id() + " §7betreten."));
+			} catch (IllegalArgumentException ignored) {}
+		}
+	}
+
 	public static void onLeave(ServerPlayer player) { FOREIGN.remove(player.getUUID()); LAST_POS.remove(player.getUUID()); }
-	public static void reset() { FOREIGN.clear(); LAST_POS.clear(); }
+	public static void reset() { FOREIGN.clear(); LAST_POS.clear(); NOTIFIED.clear(); }
 }
