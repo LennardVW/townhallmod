@@ -403,4 +403,30 @@ public class CityGameTests {
 		h.succeed();
 	}
 
+
+	@GameTest
+	public void plotEnterTitles(GameTestHelper h) {
+		ServerPlayer owner=h.makeMockServerPlayerInLevel(),guest=h.makeMockServerPlayerInLevel();
+		var config=TownhallMod.CONFIG.get();boolean enabled=config.city.claimsEnabled;var plots=PlotStorage.get(owner.level().getServer());
+		String dim=owner.level().dimension().identifier().toString(),a="test_"+UUID.randomUUID().toString().substring(0,8),b=a+"b";
+		BlockPos pa=h.absolutePos(new BlockPos(2,1,2)),pb=h.absolutePos(new BlockPos(6,1,2)),far=h.absolutePos(new BlockPos(12,1,2));
+		try {
+			config.city.claimsEnabled=true;
+			plots.put(a,new Plot(dim,pa.getX(),pa.getZ(),pa.getX(),pa.getZ(),Optional.of(owner.getUUID().toString()),List.of(),List.of(),true));
+			plots.put(b,new Plot(dim,pb.getX(),pb.getZ(),pb.getX(),pb.getZ(),Optional.of(owner.getUUID().toString()),List.of(),List.of(),true));
+			guest.setPos(pa.getX()+0.5,pa.getY(),pa.getZ()+0.5);
+			var r=PlotEnterTracker.update(guest);
+			h.assertTrue(r.kind()==PlotEnterTracker.Kind.ENTER&&r.id().equals(a),"guest entering foreign plot is reported with its id");
+			h.assertTrue(PlotEnterTracker.update(guest).kind()==PlotEnterTracker.Kind.NONE,"no repeat while staying");
+			guest.setPos(pb.getX()+0.5,pb.getY(),pb.getZ()+0.5);
+			r=PlotEnterTracker.update(guest);
+			h.assertTrue(r.kind()==PlotEnterTracker.Kind.ENTER&&r.id().equals(b),"A to B reports only the entry of B");
+			guest.setPos(far.getX()+0.5,far.getY(),far.getZ()+0.5);
+			r=PlotEnterTracker.update(guest);
+			h.assertTrue(r.kind()==PlotEnterTracker.Kind.LEAVE&&r.id().equals(b),"leaving is reported");
+			owner.setPos(pa.getX()+0.5,pa.getY(),pa.getZ()+0.5);
+			h.assertTrue(PlotEnterTracker.update(owner).kind()==PlotEnterTracker.Kind.NONE,"owner gets no message");
+		} finally { config.city.claimsEnabled=enabled;plots.remove(a);plots.remove(b);PlotEnterTracker.reset(); }
+		h.succeed();
+	}
 }

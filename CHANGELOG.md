@@ -2,6 +2,10 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.17.1 – Meldung beim Betreten fremder Grundstücke
+
+- Wer ein fremdes Grundstück betritt, sieht in der Bildschirmmitte „Grundstück von <Name>“ mit der Grundstücks-ID darunter, auf öffentlicher Fläche die ID mit „Öffentliche Fläche“. Beim Verlassen erscheint „Du verlässt das Grundstück von <Name>“. Eigene Grundstücke (Eigentümer, Miteigentümer, Manager, Mitbauer) bleiben still. Nur bei aktivem Grundstücksschutz; abschaltbar mit `city.plotEnterTitles` (Standard an).
+
 ## 1.17.0 – Grundstücke selbst verwalten
 
 - Spieler legen ihr Grundstück selbst an: `/plot claim` nimmt den Chunk, in dem sie stehen (nur bei aktivem Grundstücksschutz, ein Grundstück pro Spieler).

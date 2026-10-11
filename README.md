@@ -556,7 +556,7 @@ Die fertige Jar liegt danach in `build/libs/townhall-<version>.jar`. Java 25 mus
 | `display` | Join-Nachrichten, Tab-Liste, Todeszahl |
 | `onboarding` | Begrüßung und Regeln beim ersten Join |
 | `storage` | Gespeicherte Spielerzustände |
-| `city` | Stadtrollen, Polizeirechte und optionale Grundstücke (`claimsEnabled`, `claimChunksPerPlayer`: Chunks pro Eigentümer, Standard 1) |
+| `city` | Stadtrollen, Polizeirechte und optionale Grundstücke (`claimsEnabled`, `claimChunksPerPlayer`: Chunks pro Eigentümer, Standard 1; `plotEnterTitles`: Titel beim Betreten/Verlassen fremder Grundstücke, Standard an) |
 | `election` | Registrierung, anonyme Buchwahl, manuelle Ergebnisse |
 | `shop` | Warenbestand und Transaktionen mit Vanilla-Gegenständen |
 | `audit` | Begrenztes Änderungsprotokoll und Abfragen |

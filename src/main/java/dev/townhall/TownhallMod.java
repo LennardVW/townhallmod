@@ -90,6 +90,7 @@ public class TownhallMod implements ModInitializer {
 			Onboarding.onDisconnect(handler.player);
 			NickPackets.onLeave(handler.player);
 			Afk.onLeave(handler.player);
+			dev.townhall.city.PlotEnterTracker.onLeave(handler.player);
 			JoinMessages.onLeave(handler.player);
 		});
 		// World change: that world's difficulty/time/food, and builders may only be in creative inside their builder worlds.
@@ -105,6 +106,7 @@ public class TownhallMod implements ModInitializer {
 		Keys.register();
 		ActivityService.register();
 		JoinMessages.register();
+		dev.townhall.city.PlotEnterTracker.register();
 		// Once per second: confinement and timers, and players who haven't accepted the rules yet.
 		ServerTickEvents.END_SERVER_TICK.register(ConfinementService::onServerTick);
 		LOGGER.info("Townhall initialized with locations {}", CONFIG.get().locations.keySet());
@@ -161,6 +163,7 @@ public class TownhallMod implements ModInitializer {
 		KeyCommand.reset();
 		Onboarding.reset();
 		Afk.reset();
+		dev.townhall.city.PlotEnterTracker.reset();
 		PlotCommand.reset();
 		AuditLog.reset();
 	}
