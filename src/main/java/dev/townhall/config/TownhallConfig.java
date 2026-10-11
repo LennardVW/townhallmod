@@ -81,11 +81,11 @@ public final class TownhallConfig {
 		public int confineRadius = 32;
 		/** Old name of !escapable, still read so older config files keep working. */
 		public Boolean confineSentPlayers;
-		public String arrivedMessage = "Welcome!";
+		public String arrivedMessage = "Willkommen!";
 		/** Big title on arrival (empty = none). &-color codes work, e.g. "&6Townhall". */
 		public String title = "";
 		public String subtitle = "";
-		public String alreadyHereMessage = "You are already here. Use /%s return to go back.";
+		public String alreadyHereMessage = "Du bist schon hier. Mit /%s return kommst du zurück.";
 
 		public Location() {}
 
@@ -216,18 +216,18 @@ public final class TownhallConfig {
 	}
 
 	public static final class Messages {
-		public String returned = "Returned to your previous location.";
-		public String returnedNearby = "Your old spot was blocked, so you were placed nearby.";
-		public String returnedFallback = "Your old spot wasn't safe, so you were sent to spawn.";
-		public String noReturnPosition = "No return position is stored.";
-		public String locationUnavailable = "%s is currently unavailable.";
-		public String confined = "You can't leave %s on your own. An admin has to release you.";
-		public String confinedTimed = "You can't leave %s for another %s.";
-		public String commandBlocked = "You can't use /%s here.";
-		public String pulledBack = "You can't leave %s.";
-		public String timeLeft = "%s: %s left";
-		public String released = "Your time is up. You are free again.";
-		public String cooldown = "Please wait %d seconds before using this command again.";
+		public String returned = "Du bist wieder an deinem vorherigen Ort.";
+		public String returnedNearby = "Dein alter Platz war blockiert, daher wurdest du in die Nähe gesetzt.";
+		public String returnedFallback = "Dein alter Platz war nicht sicher, daher wurdest du zum Spawn geschickt.";
+		public String noReturnPosition = "Es ist keine Rückkehrposition gespeichert.";
+		public String locationUnavailable = "Nicht verfügbar: %s.";
+		public String confined = "Du kannst %s nicht von allein verlassen. Ein Admin muss dich freilassen.";
+		public String confinedTimed = "Du kannst %s noch %s lang nicht verlassen.";
+		public String commandBlocked = "Du kannst /%s hier nicht benutzen.";
+		public String pulledBack = "Du kannst %s nicht verlassen.";
+		public String timeLeft = "%s: noch %s";
+		public String released = "Deine Zeit ist um. Du bist wieder frei.";
+		public String cooldown = "Bitte warte %d Sekunden, bevor du den Befehl erneut benutzt.";
 	}
 
 	public static final class Spot {
@@ -255,13 +255,13 @@ public final class TownhallConfig {
 
 	private static Map<String, Location> defaultLocations() {
 		Map<String, Location> map = new LinkedHashMap<>();
-		Location townhall = new Location("townhall", "the Townhall", new Spot(0.5, 4.0, 0.5, 0f, 0f), false, true,
-				"Welcome to the Townhall.", "You are already in the Townhall. Use /townhall return to go back.");
-		townhall.title = "&6Townhall";
+		Location townhall = new Location("townhall", "das Rathaus", new Spot(0.5, 4.0, 0.5, 0f, 0f), false, true,
+				"Willkommen im Rathaus.", "Du bist schon im Rathaus. Mit /townhall return kommst du zurück.");
+		townhall.title = "&6Rathaus";
 		townhall.subtitle = "&7Willkommen!";
 		map.put("townhall", townhall);
-		Location prison = new Location("gefaengnis", "the prison", new Spot(100.5, 4.0, 100.5, 0f, 0f), true, false,
-				"You have been sent to prison.", "You are already in the prison.");
+		Location prison = new Location("gefaengnis", "das Gefängnis", new Spot(100.5, 4.0, 100.5, 0f, 0f), true, false,
+				"Du wurdest ins Gefängnis geschickt.", "Du bist schon im Gefängnis.");
 		prison.title = "&cGefängnis";
 		prison.subtitle = "&7Du wurdest eingesperrt";
 		map.put("gefaengnis", prison);
@@ -295,24 +295,77 @@ public final class TownhallConfig {
 		return ResourceKey.create(Registries.DIMENSION, Identifier.parse(fallback.dimension));
 	}
 
+	/**
+	 * Texts that still equal an old English default are replaced by the German default, so servers with an old config.json
+	 * become German too. Texts that were changed by hand are kept. Returns true if anything changed.
+	 */
+	public boolean migrateEnglishDefaults() {
+		boolean changed = false;
+		if (messages != null) {
+			Messages m = messages;
+			String[] before = {m.returned, m.returnedNearby, m.returnedFallback, m.noReturnPosition, m.locationUnavailable, m.confined,
+					m.confinedTimed, m.commandBlocked, m.pulledBack, m.timeLeft, m.released, m.cooldown};
+			m.returned = legacy(m.returned, "Returned to your previous location.", "Du bist wieder an deinem vorherigen Ort.");
+			m.returnedNearby = legacy(m.returnedNearby, "Your old spot was blocked, so you were placed nearby.", "Dein alter Platz war blockiert, daher wurdest du in die Nähe gesetzt.");
+			m.returnedFallback = legacy(m.returnedFallback, "Your old spot wasn't safe, so you were sent to spawn.", "Dein alter Platz war nicht sicher, daher wurdest du zum Spawn geschickt.");
+			m.noReturnPosition = legacy(m.noReturnPosition, "No return position is stored.", "Es ist keine Rückkehrposition gespeichert.");
+			m.locationUnavailable = legacy(m.locationUnavailable, "%s is currently unavailable.", "Nicht verfügbar: %s.");
+			m.confined = legacy(m.confined, "You can't leave %s on your own. An admin has to release you.", "Du kannst %s nicht von allein verlassen. Ein Admin muss dich freilassen.");
+			m.confinedTimed = legacy(m.confinedTimed, "You can't leave %s for another %s.", "Du kannst %s noch %s lang nicht verlassen.");
+			m.commandBlocked = legacy(m.commandBlocked, "You can't use /%s here.", "Du kannst /%s hier nicht benutzen.");
+			m.pulledBack = legacy(m.pulledBack, "You can't leave %s.", "Du kannst %s nicht verlassen.");
+			m.timeLeft = legacy(m.timeLeft, "%s: %s left", "%s: noch %s");
+			m.released = legacy(m.released, "Your time is up. You are free again.", "Deine Zeit ist um. Du bist wieder frei.");
+			m.cooldown = legacy(m.cooldown, "Please wait %d seconds before using this command again.", "Bitte warte %d Sekunden, bevor du den Befehl erneut benutzt.");
+			String[] after = {m.returned, m.returnedNearby, m.returnedFallback, m.noReturnPosition, m.locationUnavailable, m.confined,
+					m.confinedTimed, m.commandBlocked, m.pulledBack, m.timeLeft, m.released, m.cooldown};
+			changed |= !java.util.Arrays.equals(before, after);
+		}
+		if (locations != null) {
+			for (Map.Entry<String, Location> e : locations.entrySet()) {
+				Location l = e.getValue();
+				if (l == null) continue;
+				String id = e.getKey();
+				String[] before = {l.arrivedMessage, l.alreadyHereMessage, l.displayName, l.title};
+				l.alreadyHereMessage = legacy(l.alreadyHereMessage, "You are already here. Use /%s return to go back.", "Du bist schon hier. Mit /%s return kommst du zurück.");
+				l.alreadyHereMessage = legacy(l.alreadyHereMessage, "You are already in the Townhall. Use /townhall return to go back.", "Du bist schon im Rathaus. Mit /townhall return kommst du zurück.");
+				l.alreadyHereMessage = legacy(l.alreadyHereMessage, "You are already in the prison.", "Du bist schon im Gefängnis.");
+				l.arrivedMessage = legacy(l.arrivedMessage, "Welcome!", "Willkommen!");
+				l.arrivedMessage = legacy(l.arrivedMessage, "Welcome to the Townhall.", "Willkommen im Rathaus.");
+				l.arrivedMessage = legacy(l.arrivedMessage, "You have been sent to prison.", "Du wurdest ins Gefängnis geschickt.");
+				l.arrivedMessage = legacy(l.arrivedMessage, "Welcome to " + id + "!", "Willkommen in " + id + "!");
+				l.arrivedMessage = legacy(l.arrivedMessage, "You were sent to " + id + ".", "Du wurdest nach " + id + " geschickt.");
+				l.displayName = legacy(l.displayName, "the Townhall", "das Rathaus");
+				l.displayName = legacy(l.displayName, "the prison", "das Gefängnis");
+				if ("townhall".equals(id)) l.title = legacy(l.title, "&6Townhall", "&6Rathaus");
+				changed |= !java.util.Arrays.equals(before, new String[] {l.arrivedMessage, l.alreadyHereMessage, l.displayName, l.title});
+			}
+		}
+		return changed;
+	}
+
+	private static String legacy(String value, String oldDefault, String newDefault) {
+		return oldDefault.equals(value) ? newDefault : value;
+	}
+
 	/** Returns every problem found; empty means the config is usable. Missing sections count as problems. */
 	public List<String> validate() {
 		List<String> errors = new ArrayList<>();
-		if (locations == null || locations.isEmpty()) errors.add("locations must contain at least one location");
+		if (locations == null || locations.isEmpty()) errors.add("locations muss mindestens einen Ort enthalten");
 		else {
 			Set<String> commandNames = new HashSet<>();
 			for (Map.Entry<String, Location> e : locations.entrySet()) {
 				String field = "locations." + e.getKey();
 				Location loc = e.getValue();
 				if (loc == null) {
-					errors.add(field + " is empty");
+					errors.add(field + " ist leer");
 					continue;
 				}
 				if (loc.command == null || loc.command.isBlank()) loc.command = e.getKey();
-				if (!COMMAND_NAME.matcher(loc.command).matches()) errors.add(field + ".command may only use letters, digits and _ . : -");
-				if (!commandNames.add(loc.command.toLowerCase(Locale.ROOT))) errors.add(field + ".command '" + loc.command + "' is used twice");
+				if (!COMMAND_NAME.matcher(loc.command).matches()) errors.add(field + ".command darf nur Buchstaben, Ziffern und _ . : - enthalten");
+				if (!commandNames.add(loc.command.toLowerCase(Locale.ROOT))) errors.add(field + ".command '" + loc.command + "' wird doppelt verwendet");
 				checkDimension(errors, field + ".dimension", loc.dimension);
-				if (loc.spawn == null) errors.add(field + ".spawn is missing");
+				if (loc.spawn == null) errors.add(field + ".spawn fehlt");
 				else checkSpot(errors, field + ".spawn", loc.spawn);
 				if (loc.dimension != null && isSharedWorld(loc.dimension)) {
 					// Only a warning: an existing live config must keep loading. The /location commands refuse it.
@@ -322,54 +375,54 @@ public final class TownhallConfig {
 				if (loc.arrivedMessage == null) loc.arrivedMessage = "";
 				if (loc.alreadyHereMessage == null) loc.alreadyHereMessage = "";
 				checkFormat(errors, field + ".alreadyHereMessage", loc.alreadyHereMessage, "townhall");
-				if (loc.confineRadius < 0) errors.add(field + ".confineRadius must be >= 0");
+				if (loc.confineRadius < 0) errors.add(field + ".confineRadius muss >= 0 sein");
 			}
 		}
-		if (returnSettings == null) errors.add("return is missing");
-		if (safeTeleport == null) errors.add("safeTeleport is missing");
+		if (returnSettings == null) errors.add("return fehlt");
+		if (safeTeleport == null) errors.add("safeTeleport fehlt");
 		else {
-			if (safeTeleport.horizontalRadius < 0 || safeTeleport.horizontalRadius > 16) errors.add("safeTeleport.horizontalRadius must be 0-16");
-			if (safeTeleport.verticalRadius < 0 || safeTeleport.verticalRadius > 16) errors.add("safeTeleport.verticalRadius must be 0-16");
+			if (safeTeleport.horizontalRadius < 0 || safeTeleport.horizontalRadius > 16) errors.add("safeTeleport.horizontalRadius muss 0-16 sein");
+			if (safeTeleport.verticalRadius < 0 || safeTeleport.verticalRadius > 16) errors.add("safeTeleport.verticalRadius muss 0-16 sein");
 		}
-		if (fallback == null) errors.add("fallback is missing");
+		if (fallback == null) errors.add("fallback fehlt");
 		else {
 			checkDimension(errors, "fallback.dimension", fallback.dimension);
 			if (!fallback.useWorldSpawn) {
-				if (fallback.position == null) errors.add("fallback.position is missing");
+				if (fallback.position == null) errors.add("fallback.position fehlt");
 				else checkSpot(errors, "fallback.position", fallback.position);
 			}
 		}
-		if (commands == null) errors.add("commands is missing");
+		if (commands == null) errors.add("commands fehlt");
 		else {
-			if (commands.cooldownSeconds < 0) errors.add("commands.cooldownSeconds must be >= 0");
-			if (commands.operatorPermissionLevel < 1 || commands.operatorPermissionLevel > 4) errors.add("commands.operatorPermissionLevel must be 1-4");
+			if (commands.cooldownSeconds < 0) errors.add("commands.cooldownSeconds muss >= 0 sein");
+			if (commands.operatorPermissionLevel < 1 || commands.operatorPermissionLevel > 4) errors.add("commands.operatorPermissionLevel muss 1-4 sein");
 		}
 		if (dimensions == null) dimensions = new LinkedHashMap<>();
 		dimensions.forEach((id, rules) -> {
 			checkDimension(errors, "dimensions key", id);
 			if (rules != null && rules.difficulty != null && !DIFFICULTIES.contains(rules.difficulty)) {
-				errors.add("dimensions." + id + ".difficulty must be peaceful, easy, normal or hard");
+				errors.add("dimensions." + id + ".difficulty muss peaceful, easy, normal oder hard sein");
 			}
 			if (rules != null && rules.time != null && parseTime(rules.time) == null) {
-				errors.add("dimensions." + id + ".time must be day, noon, night, midnight or 0-23999");
+				errors.add("dimensions." + id + ".time muss day, noon, night, midnight oder 0-23999 sein");
 			}
 			if (rules != null && rules.builders != null) {
 				for (String uuid : rules.builders.keySet()) {
 					try {
 						java.util.UUID.fromString(uuid);
 					} catch (IllegalArgumentException e) {
-						errors.add("dimensions." + id + ".builders: '" + uuid + "' is not a player UUID");
+						errors.add("dimensions." + id + ".builders: '" + uuid + "' ist keine Spieler-UUID");
 					}
 				}
 			}
 			if (rules != null && rules.weather != null && !WEATHERS.contains(rules.weather)) {
-				errors.add("dimensions." + id + ".weather must be clear, rain or thunder");
+				errors.add("dimensions." + id + ".weather muss clear, rain oder thunder sein");
 			}
 		});
-		if (onboarding == null) errors.add("onboarding is missing");
+		if (onboarding == null) errors.add("onboarding fehlt");
 		else {
 			if (hasNullText(onboarding.welcome) || hasNullText(onboarding.tutorial) || hasNullText(onboarding.rules)) {
-				errors.add("onboarding.welcome/tutorial/rules must be lists of texts");
+				errors.add("onboarding.welcome/tutorial/rules müssen Listen von Texten sein");
 			}
 			checkText(errors, "onboarding.acceptButton", onboarding.acceptButton);
 			checkText(errors, "onboarding.acceptHint", onboarding.acceptHint);
@@ -377,8 +430,8 @@ public final class TownhallConfig {
 			checkText(errors, "onboarding.acceptedTitle", onboarding.acceptedTitle);
 			checkText(errors, "onboarding.reminder", onboarding.reminder);
 		}
-		if (confinement == null || confinement.allowedCommands == null) errors.add("confinement.allowedCommands is missing");
-		if (messages == null) errors.add("messages is missing");
+		if (confinement == null || confinement.allowedCommands == null) errors.add("confinement.allowedCommands fehlt");
+		if (messages == null) errors.add("messages fehlt");
 		else {
 			// Plain texts, and texts filled in with String.formatted(...): the sample arguments have the types the code passes.
 			checkText(errors, "messages.returned", messages.returned);
@@ -387,17 +440,17 @@ public final class TownhallConfig {
 			checkText(errors, "messages.noReturnPosition", messages.noReturnPosition);
 			checkText(errors, "messages.released", messages.released);
 			checkFormat(errors, "messages.locationUnavailable", messages.locationUnavailable, "minecraft:flatworld");
-			checkFormat(errors, "messages.confined", messages.confined, "the prison");
-			checkFormat(errors, "messages.confinedTimed", messages.confinedTimed, "the prison", "1:15");
+			checkFormat(errors, "messages.confined", messages.confined, "das Gefängnis");
+			checkFormat(errors, "messages.confinedTimed", messages.confinedTimed, "das Gefängnis", "1:15");
 			checkFormat(errors, "messages.commandBlocked", messages.commandBlocked, "home");
-			checkFormat(errors, "messages.pulledBack", messages.pulledBack, "the prison");
-			checkFormat(errors, "messages.timeLeft", messages.timeLeft, "The prison", "1:15");
+			checkFormat(errors, "messages.pulledBack", messages.pulledBack, "das Gefängnis");
+			checkFormat(errors, "messages.timeLeft", messages.timeLeft, "Das Gefängnis", "1:15");
 			checkFormat(errors, "messages.cooldown", messages.cooldown, 3L);
 		}
-		if (joinMessages == null || joinMessages.players == null) errors.add("joinMessages is missing");
-		if (tabList == null || tabList.header == null || tabList.footer == null) errors.add("tabList.header/footer must be lists");
-		if (afkMinutes < 0) errors.add("afkMinutes must be >= 0");
-		if (city == null) errors.add("city is missing");
+		if (joinMessages == null || joinMessages.players == null) errors.add("joinMessages fehlt");
+		if (tabList == null || tabList.header == null || tabList.footer == null) errors.add("tabList.header/footer müssen Listen sein");
+		if (afkMinutes < 0) errors.add("afkMinutes muss >= 0 sein");
+		if (city == null) errors.add("city fehlt");
 		else city.validate(errors);
 		return errors;
 	}
@@ -413,7 +466,7 @@ public final class TownhallConfig {
 			String.format(Locale.ROOT, text, sampleArgs);
 			return null;
 		} catch (IllegalFormatException e) {
-			return "invalid % placeholder (" + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()) + "); write %% for a percent sign";
+			return "ungültiger %-Platzhalter (" + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()) + "); schreibe %% für ein Prozentzeichen";
 		}
 	}
 
@@ -423,12 +476,12 @@ public final class TownhallConfig {
 	}
 
 	private static void checkText(List<String> errors, String field, String value) {
-		if (value == null) errors.add(field + " is missing");
+		if (value == null) errors.add(field + " fehlt");
 	}
 
 	private static void checkFormat(List<String> errors, String field, String value, Object... sampleArgs) {
 		if (value == null) {
-			errors.add(field + " is missing");
+			errors.add(field + " fehlt");
 			return;
 		}
 		String problem = formatProblem(value, sampleArgs);
@@ -437,17 +490,17 @@ public final class TownhallConfig {
 
 	private static void checkDimension(List<String> errors, String field, String value) {
 		if (value == null || !value.contains(":") || Identifier.tryParse(value) == null) {
-			errors.add(field + " must be a dimension id like minecraft:overworld, got '" + value + "'");
+			errors.add(field + " muss eine Dimensions-Kennung wie minecraft:overworld sein, ist aber '" + value + "'");
 		}
 	}
 
 	private static void checkSpot(List<String> errors, String field, Spot spot) {
 		if (!Double.isFinite(spot.x) || !Double.isFinite(spot.y) || !Double.isFinite(spot.z)
 				|| Math.abs(spot.x) > 30_000_000 || Math.abs(spot.z) > 30_000_000 || Math.abs(spot.y) > 20_000) {
-			errors.add(field + " has invalid coordinates");
+			errors.add(field + " hat ungültige Koordinaten");
 		}
 		if (!Float.isFinite(spot.yaw) || !Float.isFinite(spot.pitch) || spot.pitch < -90 || spot.pitch > 90) {
-			errors.add(field + " has invalid yaw/pitch");
+			errors.add(field + " hat ungültigen Yaw/Pitch");
 		}
 	}
 }

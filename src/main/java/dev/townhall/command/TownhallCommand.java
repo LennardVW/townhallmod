@@ -125,10 +125,10 @@ public final class TownhallCommand {
 		for (UUID id : storage.activePlayers()) {
 			storage.state(id).location().filter(loc -> !next.locations.containsKey(loc)).ifPresent(loc -> held.merge(loc, 1L, Long::sum));
 		}
-		held.forEach((loc, count) -> errors.add("locations." + loc + " is missing, but " + count + " player(s) are still held there. Release them first with /"
-				+ current.location(loc).map(l -> l.command).orElse(loc) + " return <player>, or keep the location."));
+		held.forEach((loc, count) -> errors.add("locations." + loc + " fehlt, aber dort sind noch " + count + " Spieler eingesperrt. Lass sie zuerst mit /"
+				+ current.location(loc).map(l -> l.command).orElse(loc) + " return <player> frei oder behalte den Ort."));
 		next.locations.forEach((id, loc) -> {
-			if (isForeignCommand(server, loc.command)) errors.add("locations." + id + ".command: /" + loc.command + " is already a command of Minecraft or another mod");
+			if (isForeignCommand(server, loc.command)) errors.add("locations." + id + ".command: /" + loc.command + " ist schon ein Befehl von Minecraft oder einer anderen Mod");
 		});
 		return errors;
 	}
@@ -146,7 +146,7 @@ public final class TownhallCommand {
 
 	private static int at(CommandContext<CommandSourceStack> ctx, String command, ForLocation action) throws CommandSyntaxException {
 		Optional<String> id = idFor(command);
-		return id.isPresent() ? action.run(id.get()) : fail(ctx.getSource(), "This place doesn't exist anymore.");
+		return id.isPresent() ? action.run(id.get()) : fail(ctx.getSource(), "Diesen Ort gibt es nicht mehr.");
 	}
 
 	public static LiteralArgumentBuilder<CommandSourceStack> build(String command) {
@@ -190,14 +190,14 @@ public final class TownhallCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		TownhallConfig.Location location = location(id);
 		boolean operator = isOperatorSelf(ctx.getSource());
-		if (location.adminOnly && !operator) return fail(ctx.getSource(), "Only operators can go there.");
+		if (location.adminOnly && !operator) return fail(ctx.getSource(), "Nur Operatoren dürfen dorthin.");
 		if (onCooldown(ctx.getSource(), player)) return 0;
 		return switch (TeleportService.sendTo(player, id, config, operator, false, Optional.empty())) {
 			case SENT -> ok(ctx.getSource(), location.arrivedMessage);
 			case ALREADY_THERE -> fail(ctx.getSource(), location.alreadyHereMessage.formatted(location.command));
 			case UNAVAILABLE -> fail(ctx.getSource(), config.messages.locationUnavailable.formatted(location.dimension));
 			case CONFINED -> fail(ctx.getSource(), confinedMessage(config, player));
-			case FAILED -> fail(ctx.getSource(), "Teleport failed. Please tell an operator.");
+			case FAILED -> fail(ctx.getSource(), "Teleport fehlgeschlagen. Sag bitte einem Operator Bescheid.");
 		};
 	}
 
@@ -210,8 +210,8 @@ public final class TownhallCommand {
 		if (result == TeleportService.ReturnResult.NO_POSITION && isStuck(player, config)) {
 			// Someone who reached a location another way must not get stuck there.
 			return releaseToFallback(player, config)
-					? ok(ctx.getSource(), config.messages.noReturnPosition + " Sent you to spawn instead.")
-					: fail(ctx.getSource(), "Teleport failed. Please tell an operator.");
+					? ok(ctx.getSource(), config.messages.noReturnPosition + " Du wurdest stattdessen zum Spawn geschickt.")
+					: fail(ctx.getSource(), "Teleport fehlgeschlagen. Sag bitte einem Operator Bescheid.");
 		}
 		return reportReturn(ctx.getSource(), config, result, null);
 	}
@@ -226,17 +226,17 @@ public final class TownhallCommand {
 		Optional<Long> duration = minutes.map(m -> m * 60_000L);
 		return switch (TeleportService.sendTo(target, id, config, true, true, duration)) {
 			case SENT -> {
-				String forMinutes = minutes.map(m -> " for " + m + (m == 1 ? " minute" : " minutes")).orElse("");
-				target.sendSystemMessage(Component.literal(location.arrivedMessage + (forMinutes.isEmpty() ? "" : " (" + forMinutes.strip() + " of online time)"))
+				String forMinutes = minutes.map(m -> " für " + m + (m == 1 ? " Minute" : " Minuten")).orElse("");
+				target.sendSystemMessage(Component.literal(location.arrivedMessage + (forMinutes.isEmpty() ? "" : " (" + forMinutes.strip() + " Online-Zeit)"))
 						.withStyle(ChatFormatting.GREEN));
 				boolean confined = ReturnPositionStorage.get(ctx.getSource().getServer()).state(target.getUUID()).confined();
-				String release = confined ? " They can't leave on their own; release early with /" + location.command + " return " + name + "." : "";
-				yield ok(ctx.getSource(), "Sent " + name + " to " + config.displayName(id) + (forMinutes.isEmpty() ? "." : forMinutes + " (online time).") + release);
+				String release = confined ? " Der Spieler kommt nicht von allein raus; vorzeitig freilassen mit /" + location.command + " return " + name + "." : "";
+				yield ok(ctx.getSource(), name + " geschickt. Ziel: " + config.displayName(id) + (forMinutes.isEmpty() ? "." : "," + forMinutes + " (Online-Zeit).") + release);
 			}
 
-			case ALREADY_THERE, CONFINED -> fail(ctx.getSource(), name + " is already there.");
+			case ALREADY_THERE, CONFINED -> fail(ctx.getSource(), name + " ist schon dort.");
 			case UNAVAILABLE -> fail(ctx.getSource(), config.messages.locationUnavailable.formatted(location.dimension));
-			case FAILED -> fail(ctx.getSource(), "Teleporting " + name + " failed, see the server log.");
+			case FAILED -> fail(ctx.getSource(), "Teleport von " + name + " fehlgeschlagen, siehe Server-Log.");
 		};
 	}
 
@@ -245,11 +245,11 @@ public final class TownhallCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		TeleportService.ReturnResult result = TeleportService.returnPlayer(target, config, true);
 		if (result == TeleportService.ReturnResult.NO_POSITION) {
-			if (!isStuck(target, config)) return fail(ctx.getSource(), "No return position stored for " + target.getPlainTextName() + ".");
+			if (!isStuck(target, config)) return fail(ctx.getSource(), "Für " + target.getPlainTextName() + " ist keine Rückkehrposition gespeichert.");
 			// In a location (e.g. jailed) without a saved spot: release and send to spawn instead of leaving them stuck.
-			if (!releaseToFallback(target, config)) return fail(ctx.getSource(), "Teleporting " + target.getPlainTextName() + " failed, see the server log.");
+			if (!releaseToFallback(target, config)) return fail(ctx.getSource(), "Teleport von " + target.getPlainTextName() + " fehlgeschlagen, siehe Server-Log.");
 			target.sendSystemMessage(Component.literal(config.messages.returnedFallback).withStyle(ChatFormatting.GREEN));
-			return ok(ctx.getSource(), "No return position was stored for " + target.getPlainTextName() + ", so they were released and sent to spawn.");
+			return ok(ctx.getSource(), "Für " + target.getPlainTextName() + " war keine Rückkehrposition gespeichert, daher wurde der Spieler freigelassen und zum Spawn geschickt.");
 		}
 		return reportReturn(ctx.getSource(), config, result, target);
 	}
@@ -260,12 +260,12 @@ public final class TownhallCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		TownhallConfig.Location location = location(id);
 		if (!player.level().dimension().equals(location.dimensionKey())) {
-			return fail(ctx.getSource(), "Stand in " + location.dimension + " to set the spawn of " + config.displayName(id) + ".");
+			return fail(ctx.getSource(), "Stell dich in " + location.dimension + ", um den Spawn zu setzen (" + config.displayName(id) + ").");
 		}
 		location.spawn = TownhallConfig.Spot.of(player);
 		TownhallMod.LOGGER.info("{} set the spawn of {} to {}", player.getPlainTextName(), id, formatSpot(location.spawn));
 		if (!saveConfig(ctx.getSource())) return 0;
-		return ok(ctx.getSource(), "Spawn of " + config.displayName(id) + " set to " + formatSpot(location.spawn) + ".");
+		return ok(ctx.getSource(), "Spawn gesetzt (" + config.displayName(id) + "): " + formatSpot(location.spawn) + ".");
 	}
 
 	/** difficulty &lt;dimension&gt; [peaceful|easy|normal|hard|default] */
@@ -314,15 +314,15 @@ public final class TownhallCommand {
 
 	private static int showEnd(CommandContext<CommandSourceStack> ctx) {
 		return ok(ctx.getSource(), TownhallMod.CONFIG.get().endEnabled
-				? "The End is open: end portals work."
-				: "The End is closed: end portals do nothing. Ops can still /tp there; the way back works.");
+				? "Das End ist offen: Endportale funktionieren."
+				: "Das End ist geschlossen: Endportale tun nichts. Operatoren können weiter per /tp hin, der Rückweg funktioniert.");
 	}
 
 	private static int setDeathsInTab(CommandContext<CommandSourceStack> ctx, boolean on) {
 		TownhallMod.CONFIG.get().deathsInTab = on;
 		dev.townhall.display.DeathsInTab.apply(ctx.getSource().getServer());
 		if (!saveConfig(ctx.getSource())) return 0;
-		return ok(ctx.getSource(), on ? "Deaths are shown in the tab list." : "Deaths are no longer shown in the tab list.");
+		return ok(ctx.getSource(), on ? "Tode werden in der Tab-Liste angezeigt." : "Tode werden nicht mehr in der Tab-Liste angezeigt.");
 	}
 
 	/**
@@ -340,26 +340,26 @@ public final class TownhallCommand {
 	private static int showSleep(CommandContext<CommandSourceStack> ctx) {
 		var server = ctx.getSource().getServer();
 		int percent = server.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
-		return ok(ctx.getSource(), "Sleeping: " + percent + "% of the players in a world must sleep to skip the night. " + sleepExample(server, percent));
+		return ok(ctx.getSource(), "Schlafen: " + percent + " % der Spieler in einer Welt müssen schlafen, um die Nacht zu überspringen. " + sleepExample(server, percent));
 	}
 
 	private static String sleepExample(MinecraftServer server, int percent) {
-		String others = "Players in other worlds (e.g. the townhall) don't count.";
-		if (percent > 100) return "Nobody can skip the night. " + others;
+		String others = "Spieler in anderen Welten (z. B. im Rathaus) zählen nicht.";
+		if (percent > 100) return "Niemand kann die Nacht überspringen. " + others;
 		long players = server.overworld().players().stream().filter(p -> !p.isSpectator()).count();
-		if (players == 0) return "Nobody is in the overworld right now. " + others;
+		if (players == 0) return "Gerade ist niemand in der Oberwelt. " + others;
 		long needed = Math.max(1, (long) Math.ceil(players * percent / 100.0)); // like vanilla SleepStatus.sleepersNeeded
-		return "Overworld now: " + needed + " of " + players + " must sleep. " + others;
+		return "Oberwelt jetzt: " + needed + " von " + players + " müssen schlafen. " + others;
 	}
 
 	private static int showWorldRules(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerLevel level = DimensionArgument.getDimension(ctx, "dimension");
 		DimensionSettings.Rules r = DimensionSettings.of(level.dimension());
 		ctx.getSource().sendSuccess(() -> Component.empty()
-				.append(line("World", level.dimension().identifier().toString()))
+				.append(line("Welt", level.dimension().identifier().toString()))
 				.append(line("difficulty", level.getDifficulty().getSerializedName()))
 				.append(line("pvp", String.valueOf(r.pvp())))
-				.append(line("build", r.build() + (r.build() ? "" : " (operators still can)")))
+				.append(line("build", r.build() + (r.build() ? "" : " (Operatoren dürfen trotzdem)")))
 				.append(line("builders", BuilderCommand.names(level.dimension().identifier().toString())))
 				.append(line("hunger", String.valueOf(r.hunger())))
 				.append(line("fallDamage", String.valueOf(r.fallDamage())))
@@ -367,8 +367,8 @@ public final class TownhallCommand {
 				.append(line("fire", String.valueOf(r.fire())))
 				.append(line("explosions", String.valueOf(r.explosions())))
 				.append(line("leafDecay", String.valueOf(r.leafDecay())))
-				.append(line("time", r.time() == null ? "normal" : "always " + r.time()))
-				.append(line("weather", r.weather() == null ? "normal" : "always " + r.weather())), false);
+				.append(line("time", r.time() == null ? "normal" : "immer " + r.time()))
+				.append(line("weather", r.weather() == null ? "normal" : "immer " + r.weather())), false);
 		return 1;
 	}
 
@@ -397,16 +397,16 @@ public final class TownhallCommand {
 		TownhallMod.LOGGER.info("World rule {} of {} set to {}", rule, id, value);
 		if (!saveConfig(ctx.getSource())) return 0;
 		String now = !reset ? value
-				: rule.equals("time") || rule.equals("weather") ? "default (normal)" : "default (on)";
-		return ok(ctx.getSource(), rule + " in " + id + " is now " + now + ".");
+				: rule.equals("time") || rule.equals("weather") ? "Standard (normal)" : "Standard (an)";
+		return ok(ctx.getSource(), rule + " in " + id + " ist jetzt " + now + ".");
 	}
 
 	private static int showDifficulty(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerLevel level = DimensionArgument.getDimension(ctx, "dimension");
 		boolean overridden = DimensionSettings.difficulty(level.dimension()) != null;
 		String id = level.dimension().identifier().toString();
-		return ok(ctx.getSource(), "Difficulty of " + id + ": " + level.getDifficulty().getSerializedName()
-				+ (overridden ? " (set for this world)" : " (server default)"));
+		return ok(ctx.getSource(), "Schwierigkeit von " + id + ": " + level.getDifficulty().getSerializedName()
+				+ (overridden ? " (für diese Welt gesetzt)" : " (Server-Standard)"));
 	}
 
 	private static int setDifficulty(CommandContext<CommandSourceStack> ctx, String value) throws CommandSyntaxException {
@@ -423,15 +423,15 @@ public final class TownhallCommand {
 		DimensionSettings.syncAll(ctx.getSource().getServer());
 		TownhallMod.LOGGER.info("Difficulty of {} set to {}", id, value);
 		if (!saveConfig(ctx.getSource())) return 0;
-		return ok(ctx.getSource(), "Difficulty of " + id + " is now " + level.getDifficulty().getSerializedName()
-				+ (value.equals("default") ? " (server default)" : "") + ".");
+		return ok(ctx.getSource(), "Schwierigkeit von " + id + " ist jetzt " + level.getDifficulty().getSerializedName()
+				+ (value.equals("default") ? " (Server-Standard)" : "") + ".");
 	}
 
 	private static int reload(CommandContext<CommandSourceStack> ctx) {
 		var server = ctx.getSource().getServer();
 		List<String> errors = TownhallMod.CONFIG.reload(next -> reloadProblems(server, next));
 		if (!errors.isEmpty()) {
-			ctx.getSource().sendFailure(Component.literal("Config not reloaded, the previous config stays active (config changes by command are not saved until a reload works):\n - "
+			ctx.getSource().sendFailure(Component.literal("Konfiguration nicht neu geladen, die bisherige bleibt aktiv (Änderungen per Befehl werden erst gespeichert, wenn ein Reload klappt):\n - "
 					+ String.join("\n - ", errors)));
 			return 0;
 		}
@@ -444,8 +444,8 @@ public final class TownhallCommand {
 		DimensionSettings.syncAll(server);
 		List<String> missing = config.locations.values().stream()
 				.filter(l -> server.getLevel(l.dimensionKey()) == null).map(l -> l.dimension).distinct().toList();
-		StringBuilder msg = new StringBuilder("Townhall config reloaded.");
-		if (!missing.isEmpty()) msg.append(" Not loaded: ").append(String.join(", ", missing)).append(". Loaded: ").append(TownhallMod.loadedDimensions(server)).append('.');
+		StringBuilder msg = new StringBuilder("Rathaus-Konfiguration neu geladen.");
+		if (!missing.isEmpty()) msg.append(" Nicht geladen: ").append(String.join(", ", missing)).append(". Geladen: ").append(TownhallMod.loadedDimensions(server)).append('.');
 		refreshCommands(server);
 		dev.townhall.display.DeathsInTab.apply(server);
 		// Builders removed in the file lose creative and WorldEdit right away, not only on their next world change.
@@ -461,15 +461,15 @@ public final class TownhallCommand {
 		MutableComponent text = Component.empty();
 		config.locations.forEach((id, loc) -> {
 			boolean available = server.getLevel(loc.dimensionKey()) != null;
-			text.append(line("/" + loc.command, loc.dimension + (available ? "" : " (NOT LOADED)") + " at " + formatSpot(loc.spawn)
-					+ (loc.adminOnly ? ", admin only" : "") + (loc.isEscapable() ? "" : ", not escapable (radius " + loc.confineRadius + ")")));
+			text.append(line("/" + loc.command, loc.dimension + (available ? "" : " (NICHT GELADEN)") + " bei " + formatSpot(loc.spawn)
+					+ (loc.adminOnly ? ", nur Admins" : "") + (loc.isEscapable() ? "" : ", kein Ausbruch (Radius " + loc.confineRadius + ")")));
 		});
-		text.append(line("World rules", config.dimensions.isEmpty() ? "none" : String.join(", ", config.dimensions.keySet())))
-				.append(line("Stored return positions", String.valueOf(storage.returnPositionCount())))
-				.append(line("Confined / timed players", activeList(server, storage)))
-				.append(line("Config", (TownhallMod.CONFIG.loadedFromFile() ? "loaded from " + TownhallMod.CONFIG.path().getFileName() : "built-in defaults (file invalid)")
-						+ (TownhallMod.CONFIG.canSave() ? "" : ", file has errors: changes are NOT saved until /townhall reload works")))
-				.append(line("Loaded dimensions", TownhallMod.loadedDimensions(server)));
+		text.append(line("Weltregeln", config.dimensions.isEmpty() ? "keine" : String.join(", ", config.dimensions.keySet())))
+				.append(line("Gespeicherte Rückkehrpositionen", String.valueOf(storage.returnPositionCount())))
+				.append(line("Eingesperrt / befristet", activeList(server, storage)))
+				.append(line("Config", (TownhallMod.CONFIG.loadedFromFile() ? "geladen aus " + TownhallMod.CONFIG.path().getFileName() : "eingebaute Standardwerte (Datei ungültig)")
+						+ (TownhallMod.CONFIG.canSave() ? "" : ", Datei fehlerhaft: Änderungen werden NICHT gespeichert, bis /townhall reload klappt")))
+				.append(line("Geladene Dimensionen", TownhallMod.loadedDimensions(server)));
 		ctx.getSource().sendSuccess(() -> text, false);
 		return 1;
 	}
@@ -480,19 +480,19 @@ public final class TownhallCommand {
 			ServerPlayer online = server.getPlayerList().getPlayer(profile.id());
 			PlayerState state = ReturnPositionStorage.get(server).state(profile.id());
 			MutableComponent text = Component.empty()
-					.append(line("Player", profile.name() + " (" + profile.id() + ")"))
-					.append(line("Current Dimension", online != null ? online.level().dimension().identifier().toString() : "offline"))
-					.append(line("Last Location", state.location().orElse("none") + (state.confined() ? " (confined)" : "")))
-					.append(line("Time Left", state.remainingMillis().map(ConfinementService::formatDuration).orElse("-")));
+					.append(line("Spieler", profile.name() + " (" + profile.id() + ")"))
+					.append(line("Aktuelle Dimension", online != null ? online.level().dimension().identifier().toString() : "offline"))
+					.append(line("Letzter Ort", state.location().orElse("keiner") + (state.confined() ? " (eingesperrt)" : "")))
+					.append(line("Restzeit", state.remainingMillis().map(ConfinementService::formatDuration).orElse("-")));
 			if (state.returnPosition().isEmpty()) {
-				text.append(line("Stored Return Position", "none"));
+				text.append(line("Gespeicherte Rückkehrposition", "keine"));
 			} else {
 				ReturnLocation loc = state.returnPosition().get();
-				text.append(line("Stored Return Position", loc.dimension().identifier().toString()))
+				text.append(line("Gespeicherte Rückkehrposition", loc.dimension().identifier().toString()))
 						.append(line("X", fmt(loc.x()))).append(line("Y", fmt(loc.y()))).append(line("Z", fmt(loc.z())))
 						.append(line("Yaw", fmt(loc.yaw()))).append(line("Pitch", fmt(loc.pitch())))
-						.append(line("Stored At", Instant.ofEpochMilli(loc.timestamp()).toString()
-								+ loc.playerName().map(name -> " (as " + name + ")").orElse("")));
+						.append(line("Gespeichert am", Instant.ofEpochMilli(loc.timestamp()).toString()
+								+ loc.playerName().map(name -> " (als " + name + ")").orElse("")));
 			}
 			ctx.getSource().sendSuccess(() -> text, false);
 		}
@@ -507,9 +507,9 @@ public final class TownhallCommand {
 				cleared++;
 				ServerPlayer online = ctx.getSource().getServer().getPlayerList().getPlayer(profile.id());
 				if (online != null) TeleportService.resendCommands(online);
-				ok(ctx.getSource(), "Cleared the stored position and confinement of " + profile.name() + ".");
+				ok(ctx.getSource(), "Gespeicherte Position und Einsperrung von " + profile.name() + " gelöscht.");
 			} else {
-				fail(ctx.getSource(), "Nothing stored for " + profile.name() + ".");
+				fail(ctx.getSource(), "Für " + profile.name() + " ist nichts gespeichert.");
 			}
 		}
 		return cleared;
@@ -561,11 +561,11 @@ public final class TownhallCommand {
 			case NO_POSITION -> config.messages.noReturnPosition;
 			case CONFINED, FAILED -> null;
 		};
-		if (message == null) return fail(source, "Teleport failed, see the server log.");
+		if (message == null) return fail(source, "Teleport fehlgeschlagen, siehe Server-Log.");
 		if (result == TeleportService.ReturnResult.NO_POSITION) return fail(source, message);
 		if (other == null) return ok(source, message);
 		other.sendSystemMessage(Component.literal(message).withStyle(ChatFormatting.GREEN));
-		return ok(source, "Returned " + other.getPlainTextName() + " (" + result.name().toLowerCase(Locale.ROOT) + ").");
+		return ok(source, "Zurückgeschickt: " + other.getPlainTextName() + " (" + result.name().toLowerCase(Locale.ROOT) + ").");
 	}
 
 	public static boolean isOperator(CommandSourceStack source) {
@@ -596,7 +596,7 @@ public final class TownhallCommand {
 
 	private static ServerPlayer requirePlayer(CommandSourceStack source) {
 		if (source.getEntity() instanceof ServerPlayer player) return player;
-		source.sendFailure(Component.literal("This command must be executed by a player."));
+		source.sendFailure(Component.literal("Dieser Befehl muss von einem Spieler ausgeführt werden."));
 		return null;
 	}
 

@@ -110,6 +110,6 @@ public final class Afk {
 		MinecraftServer server = player.level().getServer();
 		server.getPlayerList().broadcastAll(new ClientboundPlayerInfoUpdatePacket(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME, player));
 		server.getPlayerList().broadcastSystemMessage(Component.empty().withStyle(ChatFormatting.GRAY)
-				.append(player.getDisplayName()).append(afk ? " is now AFK." : " is back."), false);
+				.append(player.getDisplayName()).append(afk ? " ist jetzt AFK." : " ist zurück."), false);
 	}
 }

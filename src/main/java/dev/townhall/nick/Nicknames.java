@@ -100,8 +100,8 @@ public final class Nicknames extends SavedData {
 			String who = taken == null ? owner.toString() : taken.name();
 			TownhallMod.LOGGER.warn("{} joined, but {} has the nickname {}. Commands now mean {}; give {} another nickname with /nick set.",
 					name, who, taken == null ? name : taken.nick(), name, who);
-			Component warning = Component.literal("[Townhall] " + name + " has the same name as the nickname of " + who
-					+ ". Commands with this name now mean " + name + ". Please use /nick set " + who + " <other nickname>.").withStyle(ChatFormatting.GOLD);
+			Component warning = Component.literal("[Townhall] " + name + " heißt genauso wie der Spitzname von " + who
+					+ ". Befehle mit diesem Namen meinen jetzt " + name + ". Bitte setze mit /nick set " + who + " einen anderen Spitznamen.").withStyle(ChatFormatting.GOLD);
 			for (ServerPlayer online : server.getPlayerList().getPlayers()) {
 				if (TownhallMod.isOperator(online.permissions())) online.sendSystemMessage(warning);
 			}

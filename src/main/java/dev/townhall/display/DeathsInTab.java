@@ -34,7 +34,7 @@ public final class DeathsInTab {
 			return;
 		}
 		if (objective == null) {
-			objective = scoreboard.addObjective(OBJECTIVE, ObjectiveCriteria.DEATH_COUNT, Component.literal("Deaths"),
+			objective = scoreboard.addObjective(OBJECTIVE, ObjectiveCriteria.DEATH_COUNT, Component.literal("Tode"),
 					ObjectiveCriteria.RenderType.INTEGER, false, RED);
 		} else if (!RED.equals(objective.numberFormat())) {
 			objective.setNumberFormat(RED);

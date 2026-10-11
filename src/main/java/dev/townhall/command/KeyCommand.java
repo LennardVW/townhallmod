@@ -94,59 +94,59 @@ public final class KeyCommand {
 	private static int newKey(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		String name = StringArgumentType.getString(ctx, "name").strip();
-		if (name.isEmpty() || name.length() > 32) return fail(ctx.getSource(), "Key names need 1-32 characters.");
+		if (name.isEmpty() || name.length() > 32) return fail(ctx.getSource(), "Schlüsselnamen brauchen 1 bis 32 Zeichen.");
 		long wait = cooldownLeft(ctx.getSource(), player, LAST_NEW);
-		if (wait > 0) return fail(ctx.getSource(), "Please wait " + wait + " s before making another key.");
+		if (wait > 0) return fail(ctx.getSource(), "Bitte warte " + wait + " s, bevor du einen weiteren Schlüssel machst.");
 		give(player, Keys.newKey(name));
 		TownhallMod.LOGGER.info("{} made the key {}", player.getPlainTextName(), name);
-		return ok(ctx.getSource(), "New key \"" + name + "\". Right-click a door with it to lock the door.");
+		return ok(ctx.getSource(), "Neuer Schlüssel \"" + name + "\". Klicke mit ihm rechts auf eine Tür, um sie abzuschließen.");
 	}
 
 	private static int copy(CommandContext<CommandSourceStack> ctx, ServerPlayer target) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		ItemStack held = player.getMainHandItem();
 		boolean admin = Keys.isAdminKey(held);
-		if (Keys.keyId(held).isEmpty() && !admin) return fail(ctx.getSource(), "Hold a key in your main hand.");
-		if (admin && !TownhallCommand.isOperator(ctx.getSource())) return fail(ctx.getSource(), "Only operators can copy the admin key.");
+		if (Keys.keyId(held).isEmpty() && !admin) return fail(ctx.getSource(), "Halte einen Schlüssel in der Haupthand.");
+		if (admin && !TownhallCommand.isOperator(ctx.getSource())) return fail(ctx.getSource(), "Nur Operatoren dürfen den Admin-Schlüssel kopieren.");
 		long wait = cooldownLeft(ctx.getSource(), player, LAST_COPY);
-		if (wait > 0) return fail(ctx.getSource(), "Please wait " + wait + " s before copying another key.");
+		if (wait > 0) return fail(ctx.getSource(), "Bitte warte " + wait + " s, bevor du einen weiteren Schlüssel kopierst.");
 		ServerPlayer receiver = target == null ? player : target;
 		give(receiver, Keys.copy(held));
-		String name = admin ? "Admin Key" : Keys.keyName(held);
+		String name = admin ? "Admin-Schlüssel" : Keys.keyName(held);
 		TownhallMod.LOGGER.info("{} copied the key {} for {}", player.getPlainTextName(), name, receiver.getPlainTextName());
-		if (receiver != player) receiver.sendSystemMessage(Component.literal(player.getGameProfile().name() + " gave you a copy of the key \"" + name + "\".").withStyle(ChatFormatting.GREEN));
-		return ok(ctx.getSource(), "Copied the key \"" + name + "\"" + (receiver == player ? "." : " for " + receiver.getGameProfile().name() + "."));
+		if (receiver != player) receiver.sendSystemMessage(Component.literal(player.getGameProfile().name() + " hat dir eine Kopie des Schlüssels \"" + name + "\" gegeben.").withStyle(ChatFormatting.GREEN));
+		return ok(ctx.getSource(), "Schlüssel \"" + name + "\" kopiert" + (receiver == player ? "." : " für " + receiver.getGameProfile().name() + "."));
 	}
 
 	private static int admin(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		give(player, Keys.adminKey());
 		TownhallMod.LOGGER.info("{} took an admin key", player.getPlainTextName());
-		return ok(ctx.getSource(), "Admin key: right-click to lock an unlinked door or open a locked door. Existing locks stay unchanged. Use /key unlock to remove a lock. Operators only.");
+		return ok(ctx.getSource(), "Admin-Schlüssel: Rechtsklick schließt eine Tür ohne Schloss ab oder öffnet eine abgeschlossene. Bestehende Schlösser bleiben unverändert. Mit /key unlock entfernst du ein Schloss. Nur für Operatoren.");
 	}
 
 	private static int info(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		Optional<BlockPos> door = lookedAtDoor(player);
-		if (door.isEmpty()) return fail(ctx.getSource(), "Look at a door.");
+		if (door.isEmpty()) return fail(ctx.getSource(), "Sieh dir eine Tür an.");
 		Optional<DoorLocks.Lock> lock = Keys.lockAt(player.level(), door.get());
-		if (lock.isEmpty()) return ok(ctx.getSource(), "This door is not locked.");
-		return ok(ctx.getSource(), "Locked with the key \"" + lock.get().keyName() + "\" by " + lock.get().ownerName() + "."
-				+ (Keys.carriesKey(player, lock.get().key()) ? " You have the key." : ""));
+		if (lock.isEmpty()) return ok(ctx.getSource(), "Diese Tür ist nicht abgeschlossen.");
+		return ok(ctx.getSource(), "Abgeschlossen mit dem Schlüssel \"" + lock.get().keyName() + "\" von " + lock.get().ownerName() + "."
+				+ (Keys.carriesKey(player, lock.get().key()) ? " Du hast den Schlüssel." : ""));
 	}
 
 	private static int unlock(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		Optional<BlockPos> door = lookedAtDoor(player);
-		if (door.isEmpty()) return fail(ctx.getSource(), "Look at a door.");
-		if (!DoorLocks.get(player.level().getServer()).remove(player.level().dimension(), door.get())) return fail(ctx.getSource(), "This door is not locked.");
+		if (door.isEmpty()) return fail(ctx.getSource(), "Sieh dir eine Tür an.");
+		if (!DoorLocks.get(player.level().getServer()).remove(player.level().dimension(), door.get())) return fail(ctx.getSource(), "Diese Tür ist nicht abgeschlossen.");
 		TownhallMod.LOGGER.info("{} removed the lock of the door at {}", player.getPlainTextName(), door.get().toShortString());
-		return ok(ctx.getSource(), "Lock removed.");
+		return ok(ctx.getSource(), "Schloss entfernt.");
 	}
 
 	private static Component confirmButton(String text, String command) {
 		return Component.literal(text + " ").withStyle(ChatFormatting.YELLOW)
-				.append(Component.literal("[Confirm]").withStyle(st -> st.withColor(ChatFormatting.GREEN).withBold(true).withClickEvent(new ClickEvent.RunCommand(command))));
+				.append(Component.literal("[Bestätigen]").withStyle(st -> st.withColor(ChatFormatting.GREEN).withBold(true).withClickEvent(new ClickEvent.RunCommand(command))));
 	}
 
 	private static int deleteAsk(CommandContext<CommandSourceStack> ctx, boolean all) throws CommandSyntaxException {
@@ -155,20 +155,20 @@ public final class KeyCommand {
 		ItemStack held = player.getMainHandItem();
 		if (all) {
 			Optional<UUID> id = Keys.keyId(held);
-			if (Keys.isAdminKey(held)) return fail(source, "The admin key can't be deleted.");
-			if (id.isEmpty()) return fail(source, "Hold a key in your main hand.");
+			if (Keys.isAdminKey(held)) return fail(source, "Der Admin-Schlüssel kann nicht gelöscht werden.");
+			if (id.isEmpty()) return fail(source, "Halte einen Schlüssel in der Haupthand.");
 			PENDING.put(player.getUUID(), new Pending(null, null, id.get(), System.currentTimeMillis() + CONFIRM_MILLIS));
-			source.sendSuccess(() -> confirmButton("Make the key \"" + Keys.keyName(held) + "\" invalid for good? All copies stop working and every lock with it is removed.", "/key delete all confirm"), false);
+			source.sendSuccess(() -> confirmButton("Schlüssel \"" + Keys.keyName(held) + "\" endgültig ungültig machen? Alle Kopien funktionieren nicht mehr und jedes Schloss mit ihm wird entfernt.", "/key delete all confirm"), false);
 			return 1;
 		}
-		if (Keys.keyId(held).isEmpty() && !Keys.isAdminKey(held)) return fail(source, "Hold a key in your main hand.");
+		if (Keys.keyId(held).isEmpty() && !Keys.isAdminKey(held)) return fail(source, "Halte einen Schlüssel in der Haupthand.");
 		Optional<BlockPos> door = lookedAtDoor(player);
-		if (door.isEmpty()) return fail(source, "Look at a door.");
+		if (door.isEmpty()) return fail(source, "Sieh dir eine Tür an.");
 		Optional<DoorLocks.Lock> lock = Keys.lockAt(player.level(), door.get());
-		if (lock.isEmpty()) return fail(source, "This door is not locked.");
-		if (!Keys.mayDelete(player, held, lock.get())) return fail(source, "This key doesn't fit the lock of this door.");
+		if (lock.isEmpty()) return fail(source, "Diese Tür ist nicht abgeschlossen.");
+		if (!Keys.mayDelete(player, held, lock.get())) return fail(source, "Dieser Schlüssel passt nicht zum Schloss dieser Tür.");
 		PENDING.put(player.getUUID(), new Pending(player.level().dimension(), door.get(), null, System.currentTimeMillis() + CONFIRM_MILLIS));
-		source.sendSuccess(() -> confirmButton("Remove the lock of the door at " + door.get().toShortString() + "?", "/key delete confirm"), false);
+		source.sendSuccess(() -> confirmButton("Schloss der Tür bei " + door.get().toShortString() + " entfernen?", "/key delete confirm"), false);
 		return 1;
 	}
 
@@ -183,25 +183,25 @@ public final class KeyCommand {
 		CommandSourceStack source = ctx.getSource();
 		ServerPlayer player = source.getPlayerOrException();
 		Pending p = takePending(player, false);
-		if (p == null) return fail(source, "Nothing to confirm. Run /key delete again (valid for 30 s).");
+		if (p == null) return fail(source, "Nichts zu bestätigen. Führe /key delete erneut aus (30 s gültig).");
 		Optional<BlockPos> door = lookedAtDoor(player);
-		if (door.isEmpty() || !door.get().equals(p.door()) || !player.level().dimension().equals(p.dimension())) return fail(source, "Look at the same door you chose. Run /key delete again.");
+		if (door.isEmpty() || !door.get().equals(p.door()) || !player.level().dimension().equals(p.dimension())) return fail(source, "Sieh dir dieselbe Tür an wie vorher. Führe /key delete erneut aus.");
 		Optional<DoorLocks.Lock> lock = Keys.lockAt(player.level(), door.get());
-		if (lock.isEmpty()) return fail(source, "This door is not locked.");
-		if (!Keys.mayDelete(player, player.getMainHandItem(), lock.get())) return fail(source, "This key doesn't fit the lock of this door.");
+		if (lock.isEmpty()) return fail(source, "Diese Tür ist nicht abgeschlossen.");
+		if (!Keys.mayDelete(player, player.getMainHandItem(), lock.get())) return fail(source, "Dieser Schlüssel passt nicht zum Schloss dieser Tür.");
 		DoorLocks.get(player.level().getServer()).remove(player.level().dimension(), door.get());
 		dev.townhall.audit.AuditLog.record(player.level().getServer(), player, "key.delete", "Tür " + door.get().toShortString());
 		TownhallMod.LOGGER.info("{} deleted the lock of the door at {} with a key", player.getPlainTextName(), door.get().toShortString());
-		return ok(source, "Lock removed.");
+		return ok(source, "Schloss entfernt.");
 	}
 
 	private static int deleteAllConfirm(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		CommandSourceStack source = ctx.getSource();
 		ServerPlayer player = source.getPlayerOrException();
 		Pending p = takePending(player, true);
-		if (p == null) return fail(source, "Nothing to confirm. Run /key delete all again (valid for 30 s).");
+		if (p == null) return fail(source, "Nichts zu bestätigen. Führe /key delete all erneut aus (30 s gültig).");
 		ItemStack held = player.getMainHandItem();
-		if (!Keys.keyId(held).filter(p.keyId()::equals).isPresent() || Keys.isAdminKey(held)) return fail(source, "Hold the same key in your main hand. Run /key delete all again.");
+		if (!Keys.keyId(held).filter(p.keyId()::equals).isPresent() || Keys.isAdminKey(held)) return fail(source, "Halte denselben Schlüssel in der Haupthand. Führe /key delete all erneut aus.");
 		String name = Keys.keyName(held);
 		var server = player.level().getServer();
 		RevokedKeys.get(server).revoke(p.keyId());
@@ -209,7 +209,7 @@ public final class KeyCommand {
 		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, ItemStack.EMPTY);
 		dev.townhall.audit.AuditLog.record(server, player, "key.delete.all", "Schlüssel " + name + ", " + removed + " Schlösser");
 		TownhallMod.LOGGER.info("{} revoked the key {} ({} locks removed)", player.getPlainTextName(), name, removed);
-		return ok(source, "The key \"" + name + "\" is invalid now. " + removed + " lock(s) removed; copies open nothing anymore.");
+		return ok(source, "Der Schlüssel \"" + name + "\" ist jetzt ungültig. " + removed + " Schloss/Schlösser entfernt, Kopien öffnen nichts mehr.");
 	}
 
 	/** Lower half of the door the player looks at (5 blocks). */

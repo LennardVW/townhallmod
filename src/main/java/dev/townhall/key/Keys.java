@@ -59,7 +59,7 @@ public final class Keys {
 			Optional<DoorLocks.Lock> lock = lockAt((ServerLevel) level, lower);
 			if (lock.isEmpty()) return true;
 			if (!mayOpen(sp, lock.get())) {
-				sp.sendOverlayMessage(Component.literal("This door is locked. You need the key \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
+				sp.sendOverlayMessage(Component.literal("Diese Tür ist abgeschlossen. Du brauchst den Schlüssel \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
 				return false;
 			}
 			DoorLocks.get(sp.level().getServer()).remove(level.dimension(), lower);
@@ -74,7 +74,7 @@ public final class Keys {
 		if (!(door.getBlock() instanceof DoorBlock) || door.getValue(DoorBlock.HALF) != DoubleBlockHalf.LOWER) return true;
 		Optional<DoorLocks.Lock> lock = lockAt(level, above);
 		if (lock.isEmpty() || mayOpen(player, lock.get()) || TownhallMod.isOperator(player.permissions())) return true;
-		player.sendOverlayMessage(Component.literal("This block holds a locked door. You need the key \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
+		player.sendOverlayMessage(Component.literal("Dieser Block gehört zu einer abgeschlossenen Tür. Du brauchst den Schlüssel \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
 		return false;
 	}
 
@@ -90,10 +90,10 @@ public final class Keys {
 		tag.putString(KEY_TAG, id.toString());
 		tag.putString("name", name);
 		CustomData.set(DataComponents.CUSTOM_DATA, stack, tag);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal("Key: " + name).withStyle(s -> s.withColor(ChatFormatting.GOLD).withItalic(false)));
+		stack.set(DataComponents.CUSTOM_NAME, Component.literal("Schlüssel: " + name).withStyle(s -> s.withColor(ChatFormatting.GOLD).withItalic(false)));
 		stack.set(DataComponents.LORE, new ItemLore(List.of(
-				Component.literal("Right-click a door to lock it to this key.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)),
-				Component.literal("Sneak + right-click to unlock it again.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)))));
+				Component.literal("Rechtsklick auf eine Tür, um sie mit diesem Schlüssel abzuschließen.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)),
+				Component.literal("Schleichen + Rechtsklick schließt sie wieder auf.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)))));
 		return stack;
 	}
 
@@ -102,11 +102,11 @@ public final class Keys {
 		CompoundTag tag = new CompoundTag();
 		tag.putString(ADMIN_TAG, "1");
 		CustomData.set(DataComponents.CUSTOM_DATA, stack, tag);
-		stack.set(DataComponents.CUSTOM_NAME, Component.literal("Admin Key").withStyle(s -> s.withColor(ChatFormatting.RED).withBold(true).withItalic(false)));
+		stack.set(DataComponents.CUSTOM_NAME, Component.literal("Admin-Schlüssel").withStyle(s -> s.withColor(ChatFormatting.RED).withBold(true).withItalic(false)));
 		stack.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
 		stack.set(DataComponents.LORE, new ItemLore(List.of(
-				Component.literal("Locks and opens every door (operators only).").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)),
-				Component.literal("Keeps existing locks. Use /key unlock to remove one.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)))));
+				Component.literal("Schließt jede Tür ab und auf (nur Operatoren).").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)),
+				Component.literal("Bestehende Schlösser bleiben. Mit /key unlock entfernst du eins.").withStyle(s -> s.withColor(ChatFormatting.GRAY).withItalic(false)))));
 		return stack;
 	}
 
@@ -232,21 +232,21 @@ public final class Keys {
 		boolean heldAdmin = isAdminKey(held) && TownhallMod.isOperator(player.permissions());
 		Optional<UUID> heldKey = heldAdmin ? Optional.of(ADMIN_LOCK_ID)
 				: isAdminKey(held) ? Optional.empty() : keyId(held).filter(id -> !id.equals(ADMIN_LOCK_ID) && !isRevoked(player, id));
-		String heldName = heldAdmin ? "Admin Key" : keyName(held);
+		String heldName = heldAdmin ? "Admin-Schlüssel" : keyName(held);
 		Optional<DoorLocks.Lock> lock = lockAt(level, lower);
 
 		if (lock.isEmpty()) {
 			if (heldKey.isEmpty()) return InteractionResult.PASS;
 			if (!Protection.mayBuildAt(player, level, lower)) {
 				// No build rights here (public door, build:false world): the door just works like a normal door.
-				player.sendOverlayMessage(Component.literal("You can't lock doors here.").withStyle(ChatFormatting.RED));
+				player.sendOverlayMessage(Component.literal("Du kannst hier keine Türen abschließen.").withStyle(ChatFormatting.RED));
 				return InteractionResult.PASS;
 			}
 			DoorLocks.get(level.getServer()).put(level.dimension(), lower, new DoorLocks.Lock(heldKey.get().toString(), heldName,
 					player.getUUID().toString(), player.getGameProfile().name()));
 			dev.townhall.audit.AuditLog.record(level.getServer(), player, "door.lock", "Tür " + lower.toShortString());
 			TownhallMod.LOGGER.info("{} locked the door at {} in {} with key {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier(), heldName);
-			player.sendOverlayMessage(Component.literal("Door locked with key \"" + heldName + "\".").withStyle(ChatFormatting.GREEN));
+			player.sendOverlayMessage(Component.literal("Tür mit Schlüssel \"" + heldName + "\" abgeschlossen.").withStyle(ChatFormatting.GREEN));
 			resync(player, level, lower);
 			return InteractionResult.SUCCESS;
 		}
@@ -255,12 +255,12 @@ public final class Keys {
 			DoorLocks.get(level.getServer()).remove(level.dimension(), lower);
 			dev.townhall.audit.AuditLog.record(level.getServer(), player, "door.unlock", "Tür " + lower.toShortString());
 			TownhallMod.LOGGER.info("{} unlocked the door at {} in {}", player.getPlainTextName(), lower.toShortString(), level.dimension().identifier());
-			player.sendOverlayMessage(Component.literal("Door is no longer locked.").withStyle(ChatFormatting.YELLOW));
+			player.sendOverlayMessage(Component.literal("Tür ist nicht mehr abgeschlossen.").withStyle(ChatFormatting.YELLOW));
 			resync(player, level, lower);
 			return InteractionResult.SUCCESS;
 		}
 		if (mayOpen(player, lock.get())) return InteractionResult.PASS;
-		player.sendOverlayMessage(Component.literal("Locked. You need the key \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
+		player.sendOverlayMessage(Component.literal("Abgeschlossen. Du brauchst den Schlüssel \"" + lock.get().keyName() + "\".").withStyle(ChatFormatting.RED));
 		resync(player, level, lower);
 		return InteractionResult.FAIL;
 	}

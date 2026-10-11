@@ -48,19 +48,19 @@ public final class ActivityCommands {
 		var entry = Playtime.get(ctx.getSource().getServer()).of(player.id());
 		if (entry.isEmpty()) {
 			ctx.getSource().sendFailure(Component.empty().append(Nicknames.displayName(ctx.getSource().getServer(), player.id(), player.name()))
-					.append(" hasn't played here yet."));
+					.append(" hat hier noch nicht gespielt."));
 			return 0;
 		}
 		Component name = Nicknames.displayName(ctx.getSource().getServer(), player.id(), player.name());
 		ctx.getSource().sendSuccess(() -> Component.empty().withStyle(ChatFormatting.GOLD).append(name).append(": ")
 				.append(Component.literal(Playtime.format(entry.get().millis())).withStyle(ChatFormatting.WHITE))
-				.append(Component.literal(" played").withStyle(ChatFormatting.GRAY)), false);
+				.append(Component.literal(" gespielt").withStyle(ChatFormatting.GRAY)), false);
 		return 1;
 	}
 
 	private static int top(CommandContext<CommandSourceStack> ctx) {
 		var top = Playtime.get(ctx.getSource().getServer()).top(10);
-		MutableComponent text = Component.literal("Top play time").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
+		MutableComponent text = Component.literal("Meiste Spielzeit").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
 		int place = 1;
 		for (var e : top) {
 			ChatFormatting color = switch (place) {
@@ -74,7 +74,7 @@ public final class ActivityCommands {
 					.append(Component.literal("  " + Playtime.format(e.getValue().millis())).withStyle(ChatFormatting.GRAY));
 			place++;
 		}
-		if (top.isEmpty()) text.append(Component.literal("\nNobody yet.").withStyle(ChatFormatting.GRAY));
+		if (top.isEmpty()) text.append(Component.literal("\nNoch niemand.").withStyle(ChatFormatting.GRAY));
 		ctx.getSource().sendSuccess(() -> text, false);
 		return top.size();
 	}
@@ -83,7 +83,7 @@ public final class ActivityCommands {
 		int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
 		TownhallMod.CONFIG.get().afkMinutes = minutes;
 		if (!TownhallCommand.saveConfig(ctx.getSource())) return 0;
-		ctx.getSource().sendSuccess(() -> Component.literal(minutes == 0 ? "Automatic AFK is off (only /afk)." : "Players are AFK after " + minutes + " minutes without activity.")
+		ctx.getSource().sendSuccess(() -> Component.literal(minutes == 0 ? "Automatisches AFK ist aus (nur /afk)." : "Spieler gelten nach " + minutes + " Minuten ohne Aktivität als AFK.")
 				.withStyle(ChatFormatting.GREEN), true);
 		return 1;
 	}

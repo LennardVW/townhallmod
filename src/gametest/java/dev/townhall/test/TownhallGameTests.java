@@ -150,7 +150,7 @@ public class TownhallGameTests {
 		Capture self = capture(p.createCommandSourceStack(), "townhall return");
 		h.assertTrue(self.said(TownhallMod.CONFIG.get().messages.noReturnPosition), "player is told nothing is stored: " + self.messages);
 		Capture op = capture(opSource(p), "townhall return @s");
-		h.assertTrue(op.said("No return position stored for"), "operator is told nothing is stored: " + op.messages);
+		h.assertTrue(op.said("ist keine Rückkehrposition gespeichert"), "operator is told nothing is stored: " + op.messages);
 		h.assertTrue(p.level() == h.getLevel() && p.position().distanceTo(start) < EPS, "player not moved");
 		h.succeed();
 	}
@@ -270,17 +270,17 @@ public class TownhallGameTests {
 		run(p, "townhall setspawn");
 		h.assertTrue(townhall.spawn == before, "non-op can't set spawn");
 		Capture fromConsole = capture(server.createCommandSourceStack(), "townhall setspawn");
-		h.assertTrue(fromConsole.said("must be executed by a player"), "console is told to be a player: " + fromConsole.messages);
+		h.assertTrue(fromConsole.said("muss von einem Spieler ausgeführt werden"), "console is told to be a player: " + fromConsole.messages);
 		h.assertTrue(townhall.spawn == before, "console can't set spawn");
 		Capture outside = capture(opSource(p), "townhall setspawn");
-		h.assertTrue(outside.said("Stand in " + townhall.dimension), "operator outside the Townhall world is told where to stand: " + outside.messages);
+		h.assertTrue(outside.said("Stell dich in " + townhall.dimension), "operator outside the Townhall world is told where to stand: " + outside.messages);
 		h.assertTrue(townhall.spawn == before, "no spawn outside the Townhall world");
 
 		// Positive control: an operator standing in the Townhall world sets it (on the same spot, so parallel tests don't notice).
 		p.teleportTo(server.getLevel(townhall.dimensionKey()), before.x, before.y, before.z, java.util.Set.of(), before.yaw, before.pitch, true);
 		try {
 			Capture inside = capture(opSource(p), "townhall setspawn");
-			h.assertTrue(inside.said("Spawn of " + TownhallMod.CONFIG.get().displayName("townhall") + " set to"), "operator sets the spawn: " + inside.messages);
+			h.assertTrue(inside.said("Spawn gesetzt (" + TownhallMod.CONFIG.get().displayName("townhall") + ")"), "operator sets the spawn: " + inside.messages);
 			h.assertTrue(townhall.spawn != before && townhall.spawn.x == before.x && townhall.spawn.y == before.y && townhall.spawn.z == before.z,
 					"new spawn stored at the operator's position");
 		} finally {
@@ -298,9 +298,9 @@ public class TownhallGameTests {
 		storage.set(p.getUUID(), PlayerState.EMPTY.withReturnPosition(ReturnLocation.of(p)));
 		try {
 			Capture debug = capture(opSource(p), "townhall debug @p[distance=..0.5]");
-			h.assertTrue(debug.said("(as " + p.getPlainTextName() + ")"), "debug shows the name stored with the return position: " + debug.messages);
+			h.assertTrue(debug.said("(als " + p.getPlainTextName() + ")"), "debug shows the name stored with the return position: " + debug.messages);
 			Capture status = capture(server.createCommandSourceStack(), "townhall status");
-			h.assertTrue(status.said("Stored return positions"), "status lists the stored positions: " + status.messages);
+			h.assertTrue(status.said("Gespeicherte Rückkehrpositionen"), "status lists the stored positions: " + status.messages);
 			h.assertFalse(status.said("Persistent storage"), "no constant filler line: " + status.messages);
 		} finally {
 			storage.remove(p.getUUID());
@@ -367,7 +367,7 @@ public class TownhallGameTests {
 		// A sign runs with GAMEMASTER source rights but the player's own rights decide: the explicit check answers.
 		Capture sign = capture(new CommandSourceStack(CommandSource.NULL, p.position(), Vec2.ZERO, (ServerLevel) p.level(),
 				LevelBasedPermissionSet.GAMEMASTER, server, p), "gefaengnis");
-		h.assertTrue(sign.said("Only operators can go there"), "players are told why: " + sign.messages);
+		h.assertTrue(sign.said("Nur Operatoren dürfen dorthin"), "players are told why: " + sign.messages);
 		h.assertTrue(p.level() == h.getLevel() && p.position().distanceTo(start) < EPS, "player not moved");
 		h.assertTrue(ReturnPositionStorage.get(h.getLevel().getServer()).state(p.getUUID()).isEmpty(), "nothing stored");
 		h.succeed();
@@ -962,7 +962,7 @@ public class TownhallGameTests {
 				keyTestDoor(h, lower, door);
 				h.assertTrue(useDoor(h, admin, lower.above()).consumesAction(), "admin links upper half of " + block);
 				var lock = dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow();
-				h.assertTrue(lock.keyName().equals("Admin Key"), "admin lock has a readable name");
+				h.assertTrue(lock.keyName().equals("Admin-Schlüssel"), "admin lock has a readable name");
 				h.assertTrue(useDoor(h, stranger, lower) == net.minecraft.world.InteractionResult.FAIL, "no key cannot use admin-locked " + block);
 				h.assertTrue(useDoor(h, admin, lower) == net.minecraft.world.InteractionResult.PASS, "admin keeps access to " + block);
 				var encoded = dev.townhall.key.DoorLocks.CODEC.encodeStart(NbtOps.INSTANCE, dev.townhall.key.DoorLocks.get(server)).getOrThrow();
@@ -1390,12 +1390,12 @@ public class TownhallGameTests {
 		try {
 			Files.writeString(config.path(), "{ broken by the admin");
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
-			h.assertTrue(out.said("Config not reloaded"), "reload fails: " + out.messages);
+			h.assertTrue(out.said("Konfiguration nicht neu geladen"), "reload fails: " + out.messages);
 			out.messages.clear();
 			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
 			h.assertTrue(Files.readString(config.path()).equals("{ broken by the admin"), "the admin's file is not overwritten");
-			h.assertTrue(out.said("not saved"), "the admin is told it wasn't saved: " + out.messages);
-			h.assertFalse(out.said("Players are AFK after"), "no success message: " + out.messages);
+			h.assertTrue(out.said("nicht gespeichert"), "the admin is told it wasn't saved: " + out.messages);
+			h.assertFalse(out.said("Spieler gelten nach"), "no success message: " + out.messages);
 		} finally {
 			Files.writeString(config.path(), good);
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
@@ -1405,7 +1405,7 @@ public class TownhallGameTests {
 		server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
 		try {
 			h.assertTrue(Files.readString(config.path()).contains("\"afkMinutes\": " + (afk + 1)), "saved again after a working reload");
-			h.assertFalse(out.said("not saved"), "no warning when saved: " + out.messages);
+			h.assertFalse(out.said("nicht gespeichert"), "no warning when saved: " + out.messages);
 		} finally {
 			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + afk);
 		}
@@ -1430,7 +1430,7 @@ public class TownhallGameTests {
 		try {
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
 			h.assertTrue(config.get().locations.containsKey("a3test"), "reload refused: the location still holds a prisoner");
-			h.assertTrue(out.said("a3test") && out.said("Config not reloaded"), "admin is told why: " + out.messages);
+			h.assertTrue(out.said("a3test") && out.said("Konfiguration nicht neu geladen"), "admin is told why: " + out.messages);
 
 			storage.remove(prisoner);
 			out.messages.clear();
@@ -1611,7 +1611,7 @@ public class TownhallGameTests {
 			out.messages.clear();
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
 		}
-		h.assertTrue(out.said("reloaded") && !out.said("not reloaded"), "the fixed file loads: " + out.messages);
+		h.assertTrue(out.said("neu geladen") && !out.said("nicht neu geladen"), "the fixed file loads: " + out.messages);
 		h.succeed();
 	}
 

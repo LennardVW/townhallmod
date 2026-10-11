@@ -81,8 +81,8 @@ public final class BuilderCommand {
 		TownhallMod.LOGGER.info("{} made {} builder(s) in {}", ctx.getSource().getTextName(), names, dim);
 		if (!saved) return 0;
 		boolean buildOff = !DimensionSettings.of(DimensionArgument.getDimension(ctx, "dimension").dimension()).build();
-		return okAdmin(ctx.getSource(), names + " can now build in " + dim + "."
-				+ (buildOff ? "" : " Note: building is open for everyone there; turn it off with /townhall worldrule " + dim + " build false."));
+		return okAdmin(ctx.getSource(), names + " darf jetzt in " + dim + " bauen."
+				+ (buildOff ? "" : " Hinweis: Dort darf jeder bauen; schalte das mit /townhall worldrule " + dim + " build false ab."));
 	}
 
 	private static int remove(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -91,7 +91,7 @@ public final class BuilderCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		TownhallConfig.DimensionRules rules = config.dimensions.get(dim);
 		if (rules == null || rules.builders == null || !rules.builders.values().removeIf(n -> n.equalsIgnoreCase(name))) {
-			return fail(ctx.getSource(), name + " is not a builder in " + dim + ".");
+			return fail(ctx.getSource(), name + " ist kein Mitbauer in " + dim + ".");
 		}
 		if (rules.builders.isEmpty()) rules.builders = null;
 		boolean saved = save(ctx, config);
@@ -99,19 +99,19 @@ public final class BuilderCommand {
 		TownhallCommand.sendCommandsToAll(ctx.getSource().getServer()); // /builder shows up (or disappears) right away
 		TownhallMod.LOGGER.info("{} removed builder {} in {}", ctx.getSource().getTextName(), name, dim);
 		if (!saved) return 0;
-		return okAdmin(ctx.getSource(), name + " can no longer build in " + dim + ".");
+		return okAdmin(ctx.getSource(), name + " darf in " + dim + " nicht mehr bauen.");
 	}
 
 	private static int mode(CommandContext<CommandSourceStack> ctx, GameType mode) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		if (mode == GameType.CREATIVE && !Protection.isBuilderHere(player) && !TownhallCommand.isOperator(ctx.getSource())) {
-			return fail(ctx.getSource(), "You are not a builder in this world.");
+			return fail(ctx.getSource(), "Du bist in dieser Welt kein Mitbauer.");
 		}
 		player.setGameMode(mode);
 		if (mode == GameType.CREATIVE) player.addTag(Protection.BUILDER_CREATIVE_TAG);
 		else player.removeTag(Protection.BUILDER_CREATIVE_TAG);
 		TownhallMod.LOGGER.info("{} switched to {} as builder in {}", player.getPlainTextName(), mode.getName(), player.level().dimension().identifier());
-		return ok(ctx.getSource(), "Game mode: " + mode.getName());
+		return ok(ctx.getSource(), "Spielmodus: " + mode.getName());
 	}
 
 	private static int list(CommandContext<CommandSourceStack> ctx, String onlyDim) {
@@ -121,7 +121,7 @@ public final class BuilderCommand {
 			if (e.getValue() == null || e.getValue().builders == null || e.getValue().builders.isEmpty()) continue;
 			out.append("\n ").append(e.getKey()).append(": ").append(String.join(", ", e.getValue().builders.values()));
 		}
-		String text = out.isEmpty() ? "No builders" + (onlyDim == null ? "." : " in " + onlyDim + ".") : "Builders:" + out;
+		String text = out.isEmpty() ? "Keine Mitbauer" + (onlyDim == null ? "." : " in " + onlyDim + ".") : "Mitbauer:" + out;
 		ctx.getSource().sendSuccess(() -> Component.literal(text).withStyle(ChatFormatting.GOLD), false);
 		return 1;
 	}

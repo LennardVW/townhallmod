@@ -16,9 +16,9 @@ public final class CitySettings {
 	public int auditMaxEntries = 50_000;
 
 	public void validate(List<String> errors) {
-		if (claimChunksPerPlayer < 0 || claimChunksPerPlayer > 64) errors.add("city.claimChunksPerPlayer must be 0-64");
-		if (policeLocation == null || policeLocation.isBlank()) errors.add("city.policeLocation is missing");
-		if (policeMaxMinutes < 1 || policeMaxMinutes > 1440) errors.add("city.policeMaxMinutes must be 1-1440");
-		if (auditMaxEntries < 100 || auditMaxEntries > 100_000) errors.add("city.auditMaxEntries must be 100-100000");
+		if (claimChunksPerPlayer < 0 || claimChunksPerPlayer > 64) errors.add("city.claimChunksPerPlayer muss 0-64 sein");
+		if (policeLocation == null || policeLocation.isBlank()) errors.add("city.policeLocation fehlt");
+		if (policeMaxMinutes < 1 || policeMaxMinutes > 1440) errors.add("city.policeMaxMinutes muss 1-1440 sein");
+		if (auditMaxEntries < 100 || auditMaxEntries > 100_000) errors.add("city.auditMaxEntries muss 100-100000 sein");
 	}
 }

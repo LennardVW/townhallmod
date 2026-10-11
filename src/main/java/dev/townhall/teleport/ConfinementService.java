@@ -108,7 +108,7 @@ public final class ConfinementService {
 
 	/** Message for a confined player trying to leave, with the time left if the stay is timed. */
 	public static String confinedMessage(TownhallConfig config, PlayerState state) {
-		String where = state.location().map(config::displayName).orElse("this place");
+		String where = state.location().map(config::displayName).orElse("diesen Ort");
 		return state.remainingMillis()
 				.map(ms -> config.messages.confinedTimed.formatted(where, formatDuration(ms)))
 				.orElseGet(() -> config.messages.confined.formatted(where));

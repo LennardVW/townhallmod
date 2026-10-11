@@ -7,6 +7,7 @@ Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbeh
 - Neu `/key delete`: entfernt das Schloss der Tür, die man anschaut, wenn man den passenden Schlüssel in der Haupthand hält (Generalschlüssel: jedes Schloss). Vorher kommt eine Rückfrage mit klickbarem [Bestätigen], gültig 30 Sekunden und nur für dieselbe Tür.
 - Neu `/key delete all`: macht den Schlüssel in der Hand für immer ungültig. Das Item verschwindet, alle Schlösser mit diesem Schlüssel werden frei, Kopien öffnen und schließen nichts mehr (gespeicherte Liste widerrufener Schlüssel, bleibt nach Neustart). Bestätigung mit `/key delete all confirm` binnen 30 Sekunden. Der Generalschlüssel lässt sich nicht widerrufen.
 - Beide Aktionen stehen im Audit-Log.
+- Alle Meldungen auf Deutsch: Chat-, Fehler- und Erfolgsmeldungen, Schlüssel-Namen und -Beschreibungen, Knöpfe ([Bestätigen]), Config-Standardtexte und Config-Fehler. Alte Configs, die noch die englischen Standardtexte enthalten, werden beim Laden automatisch auf die deutschen umgestellt; selbst geänderte Texte bleiben.
 
 ## 1.17.2 – End abschaltbar
 
