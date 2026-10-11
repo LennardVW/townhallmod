@@ -67,6 +67,7 @@ Frei erstellbare Stadtrollen mit Bürgermeister, Polizei, Händler, Architekt un
 | Stadtrollen | Grundrollen und eigene Rollen, Offline-Zuweisung, Anzeige in Chat und Tab; eingeschränkte Polizeibefehle. |
 | Buchwahl | Wahlraum und Urne, ein registriertes Buch je Stimme, anonyme Archivierung, Handzählung durch Wahlhelfer. |
 | Spielerläden | Ein Angebot pro Laden, echte Smaragde/Diamanten, Bestände und Einnahmen für Offline-Verkäufer. |
+| Schilderläden | Schild `[Laden]` an einer Truhe, Kauf per Rechtsklick, Bezahlung und Ware direkt in der Truhe, siehe `docs/STADT.md`. |
 | Grundstücke | Optionaler Schutz. Spieler claimen und verwalten ihr Grundstück selbst (Chunk-Kontingent, Miteigentümer, Manager, Mitbauer); `/plot help` zeigt die Befehle. Rollen lassen sich ausdrücklich zulassen. |
 | Protokoll | Admin-Abfragen zu erfolgreichen Block- und Verwaltungsänderungen; begrenzte Speicherung. |
 | Onboarding | Neue Spieler sehen beim ersten Join Begrüßung, Tutorial und Regeln und müssen die Regeln akzeptieren, bevor sie spielen können. |
@@ -476,6 +477,7 @@ Beispiel für Weltregeln in der Datei:
 | `<welt>/data/townhall/plots.dat` | Optionale Grundstücke |
 | `<welt>/data/townhall/elections.dat` | Wahlen, Buchseiten und Handzählung |
 | `<welt>/data/townhall/shops.dat` | Läden, Bestand und Einnahmen |
+| `<welt>/data/townhall/sign_shops.dat` | Schilderläden |
 | `<welt>/data/townhall/audit.dat` | Änderungsprotokoll |
 
 Alle Spielerdaten sind nach UUID gespeichert, nicht nach Namen. Ein Namenswechsel bei Mojang ändert also nichts. Die Dateien werden zusammen mit der Welt gespeichert (Autosave und beim Stoppen). Wer die Welt und den Ordner `config/` sichert, hat alles gesichert.

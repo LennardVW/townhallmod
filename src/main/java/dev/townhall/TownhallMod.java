@@ -103,6 +103,7 @@ public class TownhallMod implements ModInitializer {
 		});
 		ElectionService.register();
 		ShopService.registerEvents();
+		dev.townhall.shop.sign.SignShopService.registerEvents();
 		AuditLog.register();
 		Protection.register();
 		BuilderPermissions.register();

@@ -2,6 +2,13 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.19.0 – Schilderläden
+
+- Neu: Läden ohne Befehle. Ein Händler legt die Ware in eine Truhe oder ein Fass, bringt ein Schild an der Truhe an (Wandschild oder direkt darüber) und schreibt `[Laden]`, die Menge (1–64) und den Preis (`2 Smaragde`, `1 Diamant`) darauf. Der Server formatiert und wachst das Schild; bei Fehlern (leere Truhe, falsche Zeile) bleibt es ein normales Schild.
+- Kaufen per Rechtsklick aufs Schild. Alles oder nichts: zu wenig Geld, ausverkauft, Truhe voll oder eigenes Inventar voll ergeben eine rote Meldung ohne Änderung. Bezahlung landet in der Ladentruhe, der Besitzer wird benachrichtigt. Besitzer sehen per Klick Bestand und Einnahmen. Kein Kauf im Kreativmodus, auch nicht für Operatoren; 250 ms Klicksperre.
+- Schutz: Ladentruhe (auch beide Doppeltruhen-Hälften) nur für den Besitzer, Admins dürfen öffnen; Trichter, Explosionen, Kolben, Feuer und Flüssigkeiten ändern nichts; Anbau einer Nachbartruhe durch Fremde wird verhindert. Das Schild bauen Besitzer und Admins ab; der Besitzer entfernt damit den Laden.
+- `/shop signs` listet die eigenen Schilderläden mit Ort, Ware und Bestand. Der Fass-Laden bleibt unverändert.
+
 ## 1.18.0 – Zuhause und Teleportanfragen
 
 - Neu `/sethome [name]`, `/home [name]`, `/delhome [name]` und `/homes`. Gespeichert werden Welt, Position und Blickrichtung. Standardname ist `home`; am Limit `homes.maxHomes` (Standard 1) kann nur ein Zuhause gleichen Namens überschrieben werden. Im Gefängnis und an Orten, die man nicht verlassen darf, gibt es kein `/sethome` und kein `/home`.

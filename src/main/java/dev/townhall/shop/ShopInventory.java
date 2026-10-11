@@ -5,19 +5,19 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 /** Bounded simulation of the 36 carry slots. Armor, offhand, cursor and crafting slots are never taken. */
-final class ShopInventory {
+public final class ShopInventory {
     private final ServerPlayer player;
     private final ItemStack[] slots = new ItemStack[Inventory.INVENTORY_SIZE];
-    ShopInventory(ServerPlayer player) {
+    public ShopInventory(ServerPlayer player) {
         this.player = player;
         for (int i = 0; i < slots.length; i++) slots[i] = player.getInventory().getItem(i).copy();
     }
-    long count(ItemStack template) {
+    public long count(ItemStack template) {
         long count = 0;
         for (ItemStack item : slots) if (ItemStack.isSameItemSameComponents(item, template)) count += item.getCount();
         return count;
     }
-    boolean take(ItemStack template, long count) {
+    public boolean take(ItemStack template, long count) {
         if (count < 0 || count(template) < count) return false;
         for (int i = 0; i < slots.length && count > 0; i++) {
             ItemStack stack = slots[i];
@@ -29,7 +29,7 @@ final class ShopInventory {
         }
         return true;
     }
-    boolean give(ItemStack template, long count) {
+    public boolean give(ItemStack template, long count) {
         if (count < 0 || count > 0 && template.isEmpty()) return false;
         int maximum = Math.min(64, template.getMaxStackSize());
         // Fill matching stacks before empty slots, just like vanilla inventory insertion.
@@ -48,7 +48,7 @@ final class ShopInventory {
         }
         return count == 0;
     }
-    void commit() {
+    public void commit() {
         for (int i = 0; i < slots.length; i++) player.getInventory().setItem(i, slots[i]);
         player.getInventory().setChanged();
         player.inventoryMenu.broadcastChanges();

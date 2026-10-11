@@ -66,7 +66,7 @@ public final class ShopService {
     private static ServerPlayer player(CommandSourceStack source) {
         return source.getEntity() instanceof ServerPlayer p ? p : null;
     }
-    private static String restricted(ServerPlayer player) {
+    public static String restricted(ServerPlayer player) {
         if (Onboarding.isRestricted(player)) return "Bitte zuerst die Serverregeln akzeptieren.";
         if (!TownhallMod.isOperator(player.permissions())
             && ReturnPositionStorage.get(player.level().getServer()).state(player.getUUID()).confined())
