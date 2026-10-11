@@ -81,7 +81,7 @@ public final class Protection {
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			if (Onboarding.isRestricted(sp)) return deniedOnboarding(sp);
-			if (!CivicSites.canUse(sp, (ServerLevel) level, hit.getBlockPos()) || !PlotService.canUse(sp, (ServerLevel) level, hit.getBlockPos())) return denied(sp);
+			if (!CivicSites.canUse(sp, (ServerLevel) level, hit.getBlockPos()) || !PlotService.canUse(sp, (ServerLevel) level, hit.getBlockPos())) return deniedUse(sp, level, hit.getBlockPos());
 			if (mayBuildAt(sp, (ServerLevel) level, hit.getBlockPos())) return InteractionResult.PASS;
 			BlockState target = level.getBlockState(hit.getBlockPos());
 			if (isProtectedBlock(target)) return denied(sp);
@@ -241,6 +241,13 @@ public final class Protection {
 	/** Paintings, item frames, armor stands, boats, minecarts, end crystals: things you'd break by hitting them. */
 	private static boolean isWorldObject(Entity entity) {
 		return !(entity instanceof LivingEntity) || entity instanceof ArmorStand;
+	}
+
+	/** The client already toggled the door/trapdoor locally; vanilla only resends the clicked block, so resend both door halves too. */
+	private static InteractionResult deniedUse(ServerPlayer player, net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+		for (var p : new net.minecraft.core.BlockPos[] {pos, pos.above(), pos.below()})
+			player.connection.send(new net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket(level, p));
+		return denied(player);
 	}
 
 	private static InteractionResult denied(ServerPlayer player) {
