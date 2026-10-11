@@ -2,6 +2,17 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.17.0 – Grundstücke selbst verwalten
+
+- Spieler legen ihr Grundstück selbst an: `/plot claim` nimmt den Chunk, in dem sie stehen (nur bei aktivem Grundstücksschutz, ein Grundstück pro Spieler).
+- Die Größe richtet sich nach einem Kontingent: `city.claimChunksPerPlayer` (Standard 1) je Eigentümer plus Zusatzkontingent. `/plot expand` erweitert um den Chunk, in dem man steht.
+- Miteigentümer: `/plot coowner add <spieler>` schickt eine Einladung (5 Minuten gültig) mit Knöpfen zum Annehmen; `/plot accept` und `/plot deny` gehen auch per Befehl. Erst nach der Annahme zählt das Kontingent des Miteigentümers mit.
+- Admins schalten bezahlte Fläche mit `/plot bonus <spieler> <chunks>` frei.
+- Eigentümer, Miteigentümer und Manager verwalten Mitbauer und Besucherzugang selbst (`trust`, `untrust`, `publicuse`). Eigentümer ernennen Manager (`manager`, `unmanager`) und übergeben das Grundstück (`transfer`). `<id>` ist optional: ohne sie gilt das Grundstück am Standort.
+- Neu: `/plot members`, `/plot unclaim` (mit Bestätigung) und `/plot help` (auch `/plot hilfe`), das nur die erlaubten Befehle zeigt.
+- Alte `plots.dat`-Dateien laden unverändert. Die Admin-Befehle mit Kennung funktionieren weiter.
+- Neue Tests für Claim, Erweitern, Einladungen, Kontingent, Rechteprüfung, Übergabe, Hilfe und das alte Speicherformat.
+
 ## 1.16.1 – Admin-Schlüssel können Türen abschließen
 
 - Der Generalschlüssel schließt jetzt freie Türen ab. Alte Admin-Schlüssel funktionieren weiterhin; nur echte Operatoren können sie verwenden.

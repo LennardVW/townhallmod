@@ -10,12 +10,24 @@ import java.util.*;
 
 /** Chunk-indexed SavedData: a block check only sees plots intersecting this chunk. */
 public final class PlotStorage extends SavedData {
-	public static final Codec<PlotStorage> CODEC = Codec.unboundedMap(Codec.STRING,Plot.CODEC).comapFlatMap(PlotStorage::decode,s -> s.plots);
+	private static final Codec<PlotStorage> LEGACY = Codec.unboundedMap(Codec.STRING,Plot.CODEC).comapFlatMap(m -> decode(m,Map.of()),s -> s.plots);
+	/** New format {plots, bonus}; the old bare plot map still loads (withAlternative tries the record first). */
+	public static final Codec<PlotStorage> CODEC = Codec.withAlternative(com.mojang.serialization.codecs.RecordCodecBuilder.<Raw>create(i -> i.group(
+			Codec.unboundedMap(Codec.STRING,Plot.CODEC).fieldOf("plots").forGetter(Raw::plots),
+			Codec.unboundedMap(Codec.STRING,Codec.INT).optionalFieldOf("bonus",Map.of()).forGetter(Raw::bonus)
+	).apply(i,Raw::new)).flatXmap(PlotStorage::fromRaw,s -> com.mojang.serialization.DataResult.success(new Raw(s.plots,s.bonus))),LEGACY);
+	private record Raw(Map<String,Plot> plots,Map<String,Integer> bonus) {}
+	private static com.mojang.serialization.DataResult<PlotStorage> fromRaw(Raw r) { return decode(r.plots(),r.bonus()); }
 	public static final SavedDataType<PlotStorage> TYPE = new SavedDataType<>(Identifier.fromNamespaceAndPath("townhall","plots"),PlotStorage::new,CODEC,null);
-	private static com.mojang.serialization.DataResult<PlotStorage> decode(Map<String,Plot> plots) {
+	private static com.mojang.serialization.DataResult<PlotStorage> decode(Map<String,Plot> plots,Map<String,Integer> bonus) {
 		if (plots.size() > 2000 || plots.values().stream().mapToLong(PlotStorage::chunkCount).sum() > 32_000)
 			return com.mojang.serialization.DataResult.error(() -> "Plot storage capacity exceeded");
+		for (var e : bonus.entrySet()) {
+			try { UUID.fromString(e.getKey()); } catch (IllegalArgumentException ex) { return com.mojang.serialization.DataResult.error(() -> "Invalid bonus UUID"); }
+			if (e.getValue() < 0 || e.getValue() > 1024) return com.mojang.serialization.DataResult.error(() -> "Invalid plot bonus");
+		}
 		PlotStorage result = new PlotStorage();
+		result.bonus.putAll(bonus);
 		for (var entry : plots.entrySet()) {
 			var problem = result.createProblem(entry.getKey(), entry.getValue());
 			if (problem.isPresent()) return com.mojang.serialization.DataResult.error(problem::get);
@@ -25,6 +37,7 @@ public final class PlotStorage extends SavedData {
 		return com.mojang.serialization.DataResult.success(result);
 	}
 	private final Map<String,Plot> plots;
+	private final Map<String,Integer> bonus = new LinkedHashMap<>();
 	private final Map<String,Map<Long,List<String>>> chunks = new HashMap<>();
 	public PlotStorage() { this(Map.of()); }
 	private PlotStorage(Map<String,Plot> plots) {
@@ -39,6 +52,27 @@ public final class PlotStorage extends SavedData {
 			Plot p = plots.get(id); if (p.contains(pos)) return Optional.of(Map.entry(id,p));
 		}
 		return Optional.empty();
+	}
+	public int bonus(UUID player) { return bonus.getOrDefault(player.toString(),0); }
+	public void setBonus(UUID player,int chunks) { if (chunks == 0) bonus.remove(player.toString()); else bonus.put(player.toString(),chunks); setDirty(); }
+	/** The plot where this player is main owner or co-owner (the one-plot rule makes it at most one). */
+	public Optional<Map.Entry<String,Plot>> ownedBy(UUID player) {
+		return plots.entrySet().stream().filter(e -> e.getValue().isOwner(player)).map(e -> Map.entry(e.getKey(),e.getValue())).findFirst();
+	}
+	public int quota(Plot p,int perPlayer) {
+		int total = 0;
+		if (p.owner().isPresent()) total += perPlayer + bonusOf(p.owner().get());
+		for (String c : p.coOwners()) total += perPlayer + bonusOf(c);
+		return total;
+	}
+	private int bonusOf(String uuid) { return bonus.getOrDefault(uuid,0); }
+	/** Overlap/size check for changing an existing plot's bounds. */
+	public Optional<String> resizeProblem(String id,Plot p) {
+		long width = (long)p.maxX() - p.minX() + 1, depth = (long)p.maxZ() - p.minZ() + 1;
+		if (width > 256 || depth > 256) return Optional.of("Grundstücke sind höchstens 256 × 256 Blöcke groß.");
+		if (plots.entrySet().stream().anyMatch(e -> !e.getKey().equals(id) && e.getValue().overlaps(p))) return Optional.of("Der Bereich überschneidet ein vorhandenes Grundstück.");
+		long total = plots.entrySet().stream().filter(e -> !e.getKey().equals(id)).mapToLong(e -> chunkCount(e.getValue())).sum() + chunkCount(p);
+		return total > 32_000 ? Optional.of("Zu viele Grundstücks-Chunks (maximal 32000).") : Optional.empty();
 	}
 	public Optional<String> createProblem(String id,Plot p) {
 		if (!CityAccess.validId(id)) return Optional.of("Ungültige Grundstücks-ID.");

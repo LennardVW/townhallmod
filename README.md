@@ -67,7 +67,7 @@ Frei erstellbare Stadtrollen mit Bürgermeister, Polizei, Händler, Architekt un
 | Stadtrollen | Grundrollen und eigene Rollen, Offline-Zuweisung, Anzeige in Chat und Tab; eingeschränkte Polizeibefehle. |
 | Buchwahl | Wahlraum und Urne, ein registriertes Buch je Stimme, anonyme Archivierung, Handzählung durch Wahlhelfer. |
 | Spielerläden | Ein Angebot pro Laden, echte Smaragde/Diamanten, Bestände und Einnahmen für Offline-Verkäufer. |
-| Grundstücke | Optionaler Schutz mit Eigentümern, Mitbauern und ausdrücklich zugelassenen Rollen. |
+| Grundstücke | Optionaler Schutz. Spieler claimen und verwalten ihr Grundstück selbst (Chunk-Kontingent, Miteigentümer, Manager, Mitbauer); `/plot help` zeigt die Befehle. Rollen lassen sich ausdrücklich zulassen. |
 | Protokoll | Admin-Abfragen zu erfolgreichen Block- und Verwaltungsänderungen; begrenzte Speicherung. |
 | Onboarding | Neue Spieler sehen beim ersten Join Begrüßung, Tutorial und Regeln und müssen die Regeln akzeptieren, bevor sie spielen können. |
 
@@ -556,7 +556,7 @@ Die fertige Jar liegt danach in `build/libs/townhall-<version>.jar`. Java 25 mus
 | `display` | Join-Nachrichten, Tab-Liste, Todeszahl |
 | `onboarding` | Begrüßung und Regeln beim ersten Join |
 | `storage` | Gespeicherte Spielerzustände |
-| `city` | Stadtrollen, Polizeirechte und optionale Grundstücke |
+| `city` | Stadtrollen, Polizeirechte und optionale Grundstücke (`claimsEnabled`, `claimChunksPerPlayer`: Chunks pro Eigentümer, Standard 1) |
 | `election` | Registrierung, anonyme Buchwahl, manuelle Ergebnisse |
 | `shop` | Warenbestand und Transaktionen mit Vanilla-Gegenständen |
 | `audit` | Begrenztes Änderungsprotokoll und Abfragen |

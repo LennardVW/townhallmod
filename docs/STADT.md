@@ -284,16 +284,44 @@ Alternativ Koordinaten angeben: `/plot pos1 100 64 100`, `/plot pos2 115 64 115`
 
 | Befehl | Wer? | Zweck |
 |---|---|---|
-| `/plot info [id]`, `/plot list` | Alle | Bereich und Schutzstatus sehen |
+| `/plot help` (auch `/plot hilfe`) | Alle | Kurzliste der Befehle, die du nutzen darfst; anklickbar |
+| `/plot info [id]`, `/plot list` | Alle | Bereich, Größe, Kontingent und Schutzstatus sehen |
+| `/plot members [id]` | Alle | Eigentümer, Miteigentümer, Manager und Mitbauer mit Namen |
+| `/plot claim [id]` | Spieler | Den Chunk, in dem du stehst, als dein Grundstück einrichten (nur bei aktivem Schutz) |
+| `/plot expand` | Eigentümer, Miteigentümer | Grundstück um den Chunk erweitern, in dem du stehst |
+| `/plot coowner add <spieler>`, `/plot coowner remove <spieler>` | Haupt-Eigentümer, Admin | Miteigentümer einladen oder entfernen |
+| `/plot accept [id]`, `/plot deny [id]` | Eingeladene | Einladung annehmen oder ablehnen |
+| `/plot trust [id] <spieler>`, `/plot untrust [id] <spieler>` | Eigentümer, Miteigentümer, Manager, Admin | Mitbauer hinzufügen oder entfernen, auch offline |
+| `/plot manager [id] <spieler>`, `/plot unmanager [id] <spieler>` | Eigentümer, Miteigentümer, Admin | Manager ernennen oder entfernen (Manager selbst nicht) |
+| `/plot publicuse [id] <true|false>` | Eigentümer, Miteigentümer, Manager, Admin | Besucher dürfen Türen, Knöpfe und Arbeitsblöcke benutzen |
+| `/plot transfer [id] <spieler>` | Eigentümer, Miteigentümer, Admin | Grundstück übergeben; der alte Eigentümer verliert alle Rechte |
+| `/plot unclaim`, danach `/plot unclaim confirm` | Haupt-Eigentümer, Admin | Grundstücksdefinition löschen; Gebäude bleiben stehen |
 | `/plot enabled <true|false>` | Admin | Grundstücksschutz global umschalten |
 | `/plot pos1 [x y z]`, `/plot pos2 [x y z]` | Admin | Ecken wählen |
-| `/plot create <id> [spieler]` | Admin | Bereich anlegen, optional mit Eigentümer |
-| `/plot owner <id> <spieler>` | Admin | Eigentümer ändern |
+| `/plot create <id> [spieler]` | Admin | Bereich beliebiger Größe anlegen, optional mit Eigentümer |
+| `/plot owner <id> <spieler>` | Admin | Eigentümer ändern, ohne Kontingentprüfung |
 | `/plot unowned <id>` | Admin | Eigentümer entfernen; geschützte öffentliche Fläche |
-| `/plot trust <id> <spieler>`, `/plot untrust <id> <spieler>` | Admin | Mitbauer hinzufügen oder entfernen, auch offline |
 | `/plot role <id> <rolle>`, `/plot unrole <id> <rolle>` | Admin | Bestimmte Stadtrolle zum Bauen zulassen |
-| `/plot publicuse <id> <true|false>` | Admin | Besucher dürfen Türen, Knöpfe und Arbeitsblöcke benutzen |
+| `/plot bonus <spieler> [chunks]` | Admin | Zusatzkontingent setzen (0 bis 1024) oder anzeigen |
 | `/plot delete <id>` | Admin | Bereichsdefinition entfernen; Gebäude bleiben stehen |
+
+Die `<id>` darf bei den Befehlen mit `[id]` fehlen; dann gilt das Grundstück, auf dem du stehst. Admin-Schreibweise mit Kennung (`/plot trust haus_max Anna`) funktioniert weiter. Die Rechte werden beim Ausführen geprüft; Fremde bekommen eine Fehlermeldung und nichts ändert sich.
+
+### Eigentümer verwalten selbst
+
+Wer ein Grundstück besitzt, braucht keinen Admin für den Alltag. Eigentümer und Miteigentümer vergeben Mitbauer (`trust`), ernennen Manager (`manager`), stellen den Besucherzugang ein und können das Grundstück übergeben. Manager dürfen Mitbauer und Besucherzugang verwalten, aber keine Manager ernennen und nichts übergeben. Manager bauen wie Mitbauer. Änderungen stehen im Protokoll (`plot.update`).
+
+### Grundstück selbst claimen
+
+Voraussetzung: `city.claimsEnabled` ist an.
+
+1. Stell dich in den Chunk, den du haben willst, und gib `/plot claim` ein (optional mit eigener Kennung). Das Grundstück ist genau dieser Chunk, in voller Höhe, und gehört dir.
+2. Jeder Spieler darf nur ein Grundstück besitzen oder mitbesitzen. Ein Claim in fremdem oder sich überschneidendem Bereich wird abgelehnt.
+3. Die Größe ist durch ein Kontingent begrenzt: je Eigentümer `city.claimChunksPerPlayer` (Standard 1) plus Zusatzkontingent. Mit `/plot expand` wächst das Grundstück zum kleinsten Chunk-Rechteck, das auch den Chunk umfasst, in dem du stehst. Es darf nicht größer sein als das Kontingent und kein anderes Grundstück berühren.
+4. Mehr Fläche durch einen Miteigentümer: `/plot coowner add <spieler>` schickt eine Einladung (5 Minuten gültig, nur an Spieler, die online sind). Der Eingeladene klickt [Annehmen] oder gibt `/plot accept` ein; mit `/plot deny` lehnt er ab. Erst nach der Annahme zählt sein Kontingent mit, und er kann kein eigenes Grundstück mehr anlegen. Zwei Spieler ergeben also zwei Chunks. Nur der Haupt-Eigentümer lädt ein oder entfernt Miteigentümer; Entfernen geht nur, wenn das Grundstück danach noch ins Kontingent passt.
+5. Aufgeben: `/plot unclaim`, dann `/plot unclaim confirm`. Die Gebäude bleiben stehen.
+
+Admin: Wer mehr Fläche bezahlt hat, bekommt sie mit `/plot bonus <spieler> <chunks>` freigeschaltet. Der Wert ersetzt den bisherigen Bonus; `/plot bonus <spieler>` zeigt ihn. Grundstücke ohne Eigentümer (Rathaus, öffentliche Flächen) und per `/plot create` angelegte Bereiche unterliegen keinem Kontingent.
 
 Beispiel für Architekten am Rathaus:
 
@@ -344,6 +372,7 @@ Die Admin-Befehle ändern ihre Einstellungen sofort und speichern sie in `config
 ```json
 "city": {
   "claimsEnabled": false,
+  "claimChunksPerPlayer": 1,
   "shopsEnabled": true,
   "rolesInChat": true,
   "rolesInTab": true,
