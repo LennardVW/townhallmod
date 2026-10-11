@@ -11,7 +11,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import java.util.*;
 
-/** Screen title when a player enters or leaves somebody else's plot. Logic in {@link #update}, sending is thin on top. */
+/** Small centred text (subtitle line) when a player enters or leaves a plot. Logic in {@link #update}, sending is thin on top. */
 public final class PlotEnterTracker {
 	private PlotEnterTracker() {}
 	public enum Kind { NONE, ENTER, LEAVE }
@@ -44,9 +44,7 @@ public final class PlotEnterTracker {
 		var at = PlotService.at(player.level(),player.blockPosition());
 		String now = null; Plot plot = null;
 		if (at.isPresent()) {
-			Plot p = at.get().getValue();
-			boolean own = p.isOwner(id) || p.isManager(id) || p.trusted().contains(id.toString());
-			if (!own) { now = at.get().getKey(); plot = p; }
+			now = at.get().getKey(); plot = at.get().getValue();
 		}
 		String before = now == null ? FOREIGN.remove(id) : FOREIGN.put(id,now);
 		if (Objects.equals(before,now)) return Result.NONE;
@@ -74,15 +72,25 @@ public final class PlotEnterTracker {
 	}
 
 	/** {title, subtitle} for a result, or null for NONE. */
-	public static String[] texts(MinecraftServer server, Result r) {
+	public static String[] texts(MinecraftServer server, Result r) { return texts(server,r,null); }
+
+	/** {title, subtitle}; the big title stays blank, the text goes into the smaller subtitle line. */
+	public static String[] texts(MinecraftServer server, Result r, UUID viewer) {
 		if (r.kind() == Kind.NONE) return null;
 		String owners = r.plot() == null || r.plot().owner().isEmpty() ? null : ownerNames(server,r.plot());
-		if (r.kind() == Kind.ENTER) return owners == null ? new String[]{r.id(),"Öffentliche Fläche"} : new String[]{"Grundstück von " + owners,r.id()};
-		return new String[]{"","Du verlässt " + (owners == null ? r.id() : "das Grundstück von " + owners)};
+		if (r.kind() == Kind.ENTER) {
+			if (owners == null) return new String[]{" ","§e" + r.id() + " §7(öffentliche Fläche)"};
+			if (viewer != null && r.plot().isOwner(viewer)) return new String[]{" ","§aDein Grundstück §7(" + r.id() + ")"};
+			if (viewer != null && (r.plot().isManager(viewer) || r.plot().trusted().contains(viewer.toString())))
+				return new String[]{" ","§bGrundstück von " + owners + " §7(du bist Mitglied)"};
+			return new String[]{" ","§6Grundstück von " + owners};
+		}
+		if (viewer != null && r.plot() != null && r.plot().isOwner(viewer)) return new String[]{" ","§7Du verlässt dein Grundstück"};
+		return new String[]{" ","§7Du verlässt " + (owners == null ? r.id() : "das Grundstück von " + owners)};
 	}
 
 	private static void send(ServerPlayer player, Result r) {
-		String[] t = texts(player.level().getServer(),r);
+		String[] t = texts(player.level().getServer(),r,player.getUUID());
 		if (t == null) return;
 		player.connection.send(new ClientboundSetTitlesAnimationPacket(5,40,10));
 		player.connection.send(new ClientboundSetSubtitleTextPacket(Text.of(t[1])));
