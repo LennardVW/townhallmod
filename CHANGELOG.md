@@ -5,6 +5,7 @@ Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbeh
 ## 1.17.1 – Meldung beim Betreten fremder Grundstücke
 
 - Wer ein fremdes Grundstück betritt, sieht in der Bildschirmmitte „Grundstück von <Name>“ mit der Grundstücks-ID darunter, auf öffentlicher Fläche die ID mit „Öffentliche Fläche“. Beim Verlassen erscheint „Du verlässt das Grundstück von <Name>“. Eigene Grundstücke (Eigentümer, Miteigentümer, Manager, Mitbauer) bleiben still. Nur bei aktivem Grundstücksschutz; abschaltbar mit `city.plotEnterTitles` (Standard an).
+- Neuer Test führt `/plot claim` und `/plot coowner add <name>` über den echten Befehlsverteiler aus (Overworld/Nether, mit und ohne OP, positive und negative Koordinaten).
 
 ## 1.17.0 – Grundstücke selbst verwalten
 
