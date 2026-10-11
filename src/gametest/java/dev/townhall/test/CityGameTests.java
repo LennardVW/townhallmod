@@ -103,6 +103,119 @@ public class CityGameTests {
 		h.succeed();
 	}
 	@GameTest
+	public void plotSelfManagement(GameTestHelper h) {
+		ServerPlayer owner=h.makeMockServerPlayerInLevel(),friend=h.makeMockServerPlayerInLevel(),stranger=h.makeMockServerPlayerInLevel(),manager=h.makeMockServerPlayerInLevel();
+		var config=TownhallMod.CONFIG.get();boolean enabled=config.city.claimsEnabled;var plots=PlotStorage.get(owner.level().getServer());
+		String dim=owner.level().dimension().identifier().toString(),id="test_"+UUID.randomUUID().toString().substring(0,8);BlockPos pos=h.absolutePos(new BlockPos(2,1,2));
+		try {
+			config.city.claimsEnabled=true;
+			plots.put(id,new Plot(dim,pos.getX(),pos.getZ(),pos.getX(),pos.getZ(),Optional.of(owner.getUUID().toString()),List.of(),List.of(),true));
+			int k=10;for(ServerPlayer q:List.of(owner,friend,stranger,manager)) q.absSnapTo(pos.getX()+0.5+(k+=10),pos.getY(),pos.getZ()+0.5,0,0);
+			h.assertTrue(!PlotService.canBuild(friend,friend.level(),pos),"friend cannot build yet");
+			command(at(stranger,pos),"plot trust "+sel(friend));
+			h.assertTrue(plots.plots().get(id).trusted().isEmpty() && !PlotService.canBuild(friend,friend.level(),pos),"stranger trust rejected, no change");
+			command(at(owner,pos),"plot trust "+sel(friend));
+			h.assertTrue(PlotService.canBuild(friend,friend.level(),pos),"owner trust at own position lets friend build");
+			command(at(owner,pos),"plot manager "+id+" "+sel(manager));
+			h.assertTrue(plots.plots().get(id).managers().contains(manager.getUUID().toString()) && PlotService.canBuild(manager,manager.level(),pos),"manager added and can build");
+			command(at(manager,pos),"plot untrust "+sel(friend));
+			h.assertTrue(!PlotService.canBuild(friend,friend.level(),pos),"manager may untrust");
+			command(at(manager,pos),"plot manager "+sel(stranger));
+			h.assertTrue(plots.plots().get(id).managers().size()==1,"manager cannot appoint managers");
+			command(at(manager,pos),"plot transfer "+sel(manager));
+			h.assertTrue(plots.plots().get(id).isOwner(owner.getUUID()),"manager cannot transfer");
+			command(at(owner,pos),"plot transfer "+sel(friend));
+			var moved=plots.plots().get(id);
+			h.assertTrue(moved.isOwner(friend.getUUID()) && !PlotService.canBuild(owner,owner.level(),pos),"old owner loses building right after transfer");
+			h.assertTrue(PlotService.canBuild(friend,friend.level(),pos) && PlotService.canBuild(manager,manager.level(),pos),"new owner and manager can build");
+		} finally { config.city.claimsEnabled=enabled;plots.remove(id); }
+		h.succeed();
+	}
+	private static void snapChunk(ServerPlayer p,int cx,int cz,BlockPos pos) { p.absSnapTo(cx*16+8.5,pos.getY(),cz*16+8.5,0,0); }
+	private static long ownedCount(PlotStorage plots,UUID who) { return plots.plots().values().stream().filter(x -> x.isOwner(who)).count(); }
+	@GameTest
+	public void plotClaimExpandAndCoOwners(GameTestHelper h) {
+		ServerPlayer a=h.makeMockServerPlayerInLevel(),b=h.makeMockServerPlayerInLevel(),c=h.makeMockServerPlayerInLevel();
+		var server=a.level().getServer();var config=TownhallMod.CONFIG.get();boolean enabled=config.city.claimsEnabled;int per=config.city.claimChunksPerPlayer;
+		var plots=PlotStorage.get(server);BlockPos pos=h.absolutePos(new BlockPos(2,1,2));int cx=(pos.getX()>>4)+40,cz=pos.getZ()>>4;
+		var admin=server.createCommandSourceStack();
+		try {
+			config.city.claimsEnabled=true;config.city.claimChunksPerPlayer=1;
+			String na=sel(a),nb=sel(b),nc=sel(c);
+			snapChunk(a,cx,cz,pos);command(a.createCommandSourceStack(),"plot claim");
+			var mine=plots.ownedBy(a.getUUID()).orElseThrow();String id=mine.getKey();
+			h.assertTrue(mine.getValue().chunkCount()==1 && mine.getValue().minX()==cx*16 && mine.getValue().maxZ()==cz*16+15,"claim creates exactly the standing chunk");
+			snapChunk(a,cx,cz+3,pos);command(a.createCommandSourceStack(),"plot claim");
+			h.assertTrue(ownedCount(plots,a.getUUID())==1,"second claim by same player rejected");
+			snapChunk(b,cx,cz,pos);command(b.createCommandSourceStack(),"plot claim");
+			h.assertTrue(plots.ownedBy(b.getUUID()).isEmpty(),"claim inside foreign plot rejected");
+			snapChunk(a,cx+1,cz,pos);command(a.createCommandSourceStack(),"plot expand");
+			h.assertTrue(plots.plots().get(id).chunkCount()==1,"expand without quota rejected");
+			command(a.createCommandSourceStack(),"plot coowner add "+id+" "+nb);
+			h.assertTrue(plots.plots().get(id).coOwners().isEmpty(),"invite alone does not make a co-owner");
+			command(a.createCommandSourceStack(),"plot expand");
+			h.assertTrue(plots.plots().get(id).chunkCount()==1,"invite alone gives no quota");
+			command(b.createCommandSourceStack(),"plot deny");
+			h.assertTrue(command(b.createCommandSourceStack(),"plot accept")==0 && plots.plots().get(id).coOwners().isEmpty(),"denied invite is gone, accept finds nothing");
+			command(a.createCommandSourceStack(),"plot coowner add "+id+" "+nb);command(b.createCommandSourceStack(),"plot accept");
+			h.assertTrue(plots.plots().get(id).coOwners().contains(b.getUUID().toString()),"accept makes co-owner");
+			snapChunk(b,cx,cz+8,pos);command(b.createCommandSourceStack(),"plot claim");
+			h.assertTrue(plots.ownedBy(b.getUUID()).orElseThrow().getKey().equals(id),"co-owner cannot claim own plot");
+			snapChunk(c,cx,cz+20,pos);command(c.createCommandSourceStack(),"plot claim");
+			command(a.createCommandSourceStack(),"plot coowner add "+id+" "+nc);command(c.createCommandSourceStack(),"plot accept");
+			h.assertTrue(!plots.plots().get(id).coOwners().contains(c.getUUID().toString()),"owner of another plot cannot become co-owner");
+			command(a.createCommandSourceStack(),"plot expand");
+			h.assertTrue(plots.plots().get(id).chunkCount()==2,"co-owner quota allows two chunks");
+			snapChunk(a,cx+2,cz,pos);command(a.createCommandSourceStack(),"plot expand");
+			h.assertTrue(plots.plots().get(id).chunkCount()==2,"third chunk rejected");
+			command(admin,"plot bonus "+na+" 1");
+			h.assertTrue(plots.bonus(a.getUUID())==1,"bonus stored");
+			command(a.createCommandSourceStack(),"plot expand");
+			h.assertTrue(plots.plots().get(id).chunkCount()==3,"bonus allows third chunk");
+			command(b.createCommandSourceStack(),"plot coowner remove "+id+" "+na);
+			command(a.createCommandSourceStack(),"plot coowner remove "+id+" "+nb);
+			h.assertTrue(plots.plots().get(id).coOwners().contains(b.getUUID().toString()),"co-owner removal rejected while plot exceeds remaining quota");
+			command(a.createCommandSourceStack(),"plot unclaim");
+			h.assertTrue(plots.plots().containsKey(id),"unclaim needs confirmation");
+			command(a.createCommandSourceStack(),"plot unclaim confirm");
+			h.assertTrue(!plots.plots().containsKey(id),"confirmed unclaim removes the plot");
+		} finally {
+			config.city.claimsEnabled=enabled;config.city.claimChunksPerPlayer=per;
+			for(var e:List.copyOf(plots.plots().entrySet())) if(e.getValue().isOwner(a.getUUID())||e.getValue().isOwner(c.getUUID())) plots.remove(e.getKey());
+			plots.setBonus(a.getUUID(),0);
+		}
+		h.succeed();
+	}
+	@GameTest
+	public void plotHelpHidesAdminCommands(GameTestHelper h) {
+		ServerPlayer p=h.makeMockServerPlayerInLevel();
+		h.assertTrue(command(p.createCommandSourceStack(),"plot help")==1 && command(p.createCommandSourceStack(),"plot hilfe")==1,"help runs for non-op");
+		String user=String.join("\n",PlotCommand.helpLines(false).stream().map(x -> x.getString()).toList()),admin=String.join("\n",PlotCommand.helpLines(true).stream().map(x -> x.getString()).toList());
+		h.assertTrue(user.contains("/plot claim") && user.contains("/plot accept") && user.contains("/plot coowner add"),"player commands listed");
+		for(String bad:List.of("/plot create","/plot delete","/plot bonus","/plot enabled","/plot owner ","/plot role")) h.assertTrue(!user.contains(bad) && admin.contains(bad),"admin command only for admins: "+bad);
+		h.succeed();
+	}
+	@GameTest
+	public void plotStorageLoadsOldFormat(GameTestHelper h) {
+		var plot=new net.minecraft.nbt.CompoundTag();
+		plot.putString("dimension","minecraft:overworld");plot.putInt("minX",0);plot.putInt("minZ",0);plot.putInt("maxX",15);plot.putInt("maxZ",15);
+		var legacy=new net.minecraft.nbt.CompoundTag();legacy.put("alt",plot);
+		var loaded=PlotStorage.CODEC.parse(NbtOps.INSTANCE,legacy).getOrThrow();
+		h.assertTrue(loaded.plots().containsKey("alt") && loaded.plots().get("alt").coOwners().isEmpty() && loaded.plots().get("alt").managers().isEmpty(),"old plots.dat without new fields loads");
+		UUID u=UUID.randomUUID();loaded.setBonus(u,2);
+		var again=PlotStorage.CODEC.parse(NbtOps.INSTANCE,PlotStorage.CODEC.encodeStart(NbtOps.INSTANCE,loaded).getOrThrow()).getOrThrow();
+		h.assertTrue(again.bonus(u)==2 && again.plots().containsKey("alt"),"new format round trip keeps plots and bonus");h.succeed();
+	}
+	@GameTest
+	public void plotCodecLoadsOldDataWithoutManagers(GameTestHelper h) {
+		var tag=new net.minecraft.nbt.CompoundTag();
+		tag.putString("dimension","minecraft:overworld");tag.putInt("minX",0);tag.putInt("minZ",0);tag.putInt("maxX",3);tag.putInt("maxZ",3);
+		var plot=Plot.CODEC.parse(NbtOps.INSTANCE,tag).getOrThrow();
+		h.assertTrue(plot.managers().isEmpty(),"old plot without managers loads with empty set");
+		var again=Plot.CODEC.parse(NbtOps.INSTANCE,Plot.CODEC.encodeStart(NbtOps.INSTANCE,plot.withManagers(List.of(UUID.randomUUID().toString()))).getOrThrow()).getOrThrow();
+		h.assertTrue(again.managers().size()==1,"managers survive codec round trip");h.succeed();
+	}
+	@GameTest
 	public void plotBoundsOverlapAndCodec(GameTestHelper h) {
 		PlotStorage plots=new PlotStorage(); UUID owner=UUID.randomUUID();Plot p=new Plot("minecraft:overworld",-17,-17,3,3,Optional.of(owner.toString()),List.of(),List.of(),true);
 		h.assertTrue(plots.createProblem("one",p).isEmpty(),"valid rectangle accepted");plots.put("one",p);
@@ -133,8 +246,13 @@ public class CityGameTests {
 		h.assertTrue(!RoleService.hasPermission(forged,"police.jail"),"role capabilities use actor's own permissions");
 		h.assertTrue(CityAccess.isAdmin(p.level().getServer().createCommandSourceStack()),"real console can administer city");h.succeed();
 	}
-	private static void command(net.minecraft.commands.CommandSourceStack source, String text) {
-		source.getServer().getCommands().performPrefixedCommand(source, text);
+	private static String sel(ServerPlayer p) {
+		String name="n"+p.getStringUUID().replace("-","").substring(0,12);
+		p.level().getServer().services().nameToIdCache().add(new net.minecraft.server.players.NameAndId(p.getUUID(),name));return name;
+	}
+	private static net.minecraft.commands.CommandSourceStack at(ServerPlayer p,BlockPos pos) { return p.createCommandSourceStack().withPosition(net.minecraft.world.phys.Vec3.atCenterOf(pos)); }
+	private static int command(net.minecraft.commands.CommandSourceStack source, String text) {
+		try { return source.getServer().getCommands().getDispatcher().execute(text,source); } catch (Exception e) { return -1; }
 	}
 	@GameTest
 	public void offlineRoleCommandsAndWhitelistedPermissions(GameTestHelper h) {
