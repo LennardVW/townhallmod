@@ -187,6 +187,35 @@ public class CityGameTests {
 		h.succeed();
 	}
 	@GameTest
+	public void plotCoOwnerAddByNameFromInsideOwnPlot(GameTestHelper h) {
+		var server=h.getLevel().getServer();var config=TownhallMod.CONFIG.get();boolean enabled=config.city.claimsEnabled;int per=config.city.claimChunksPerPlayer;
+		var plots=PlotStorage.get(server);BlockPos pos=h.absolutePos(new BlockPos(2,1,2));
+		config.city.claimsEnabled=true;config.city.claimChunksPerPlayer=1;
+		java.util.List<ServerPlayer> all=new java.util.ArrayList<>();
+		try {
+			int[][] chunks={{60,60},{-60,-60},{-61,70}};
+			for(var dimKey:List.of(net.minecraft.world.level.Level.OVERWORLD,net.minecraft.world.level.Level.NETHER)) for(boolean op:List.of(false,true)) for(int[] ch:chunks) {
+				ServerPlayer a=h.makeMockServerPlayerInLevel(),b=h.makeMockServerPlayerInLevel();all.add(a);all.add(b);
+				if(op) server.getPlayerList().op(a.nameAndId());
+				var level=server.getLevel(dimKey);
+				String nb=sel(b);String ctx=dimKey.identifier()+" op="+op+" chunk="+ch[0]+","+ch[1];
+				snapChunk(a,ch[0],ch[1],pos);
+				var src=a.createCommandSourceStack().withLevel(level);
+				server.getCommands().performPrefixedCommand(src,"plot claim");
+				var mine=plots.ownedBy(a.getUUID());
+				h.assertTrue(mine.isPresent(),"claim worked: "+ctx);
+				var src2=a.createCommandSourceStack().withLevel(level).withPosition(a.position());
+				int r=server.getCommands().getDispatcher().execute("plot coowner add "+nb,src2);
+				h.assertTrue(r==1,"coowner add by name from inside plot returns success: "+ctx+" result="+r);
+				int acc=server.getCommands().getDispatcher().execute("plot accept",b.createCommandSourceStack());
+				h.assertTrue(acc==1 && plots.plots().get(mine.get().getKey()).coOwners().contains(b.getUUID().toString()),"invite created and accepted: "+ctx);
+				plots.remove(mine.get().getKey());
+			}
+		} catch(com.mojang.brigadier.exceptions.CommandSyntaxException e) { throw new AssertionError(e.getMessage()); }
+		finally { config.city.claimsEnabled=enabled;config.city.claimChunksPerPlayer=per;for(var e:List.copyOf(plots.plots().entrySet())) for(var pl:all) if(e.getValue().isOwner(pl.getUUID())) plots.remove(e.getKey()); }
+		h.succeed();
+	}
+	@GameTest
 	public void plotHelpHidesAdminCommands(GameTestHelper h) {
 		ServerPlayer p=h.makeMockServerPlayerInLevel();
 		h.assertTrue(command(p.createCommandSourceStack(),"plot help")==1 && command(p.createCommandSourceStack(),"plot hilfe")==1,"help runs for non-op");
@@ -403,4 +432,30 @@ public class CityGameTests {
 		h.succeed();
 	}
 
+
+	@GameTest
+	public void plotEnterTitles(GameTestHelper h) {
+		ServerPlayer owner=h.makeMockServerPlayerInLevel(),guest=h.makeMockServerPlayerInLevel();
+		var config=TownhallMod.CONFIG.get();boolean enabled=config.city.claimsEnabled;var plots=PlotStorage.get(owner.level().getServer());
+		String dim=owner.level().dimension().identifier().toString(),a="test_"+UUID.randomUUID().toString().substring(0,8),b=a+"b";
+		BlockPos pa=h.absolutePos(new BlockPos(2,1,2)),pb=h.absolutePos(new BlockPos(6,1,2)),far=h.absolutePos(new BlockPos(12,1,2));
+		try {
+			config.city.claimsEnabled=true;
+			plots.put(a,new Plot(dim,pa.getX(),pa.getZ(),pa.getX(),pa.getZ(),Optional.of(owner.getUUID().toString()),List.of(),List.of(),true));
+			plots.put(b,new Plot(dim,pb.getX(),pb.getZ(),pb.getX(),pb.getZ(),Optional.of(owner.getUUID().toString()),List.of(),List.of(),true));
+			guest.setPos(pa.getX()+0.5,pa.getY(),pa.getZ()+0.5);
+			var r=PlotEnterTracker.update(guest);
+			h.assertTrue(r.kind()==PlotEnterTracker.Kind.ENTER&&r.id().equals(a),"guest entering foreign plot is reported with its id");
+			h.assertTrue(PlotEnterTracker.update(guest).kind()==PlotEnterTracker.Kind.NONE,"no repeat while staying");
+			guest.setPos(pb.getX()+0.5,pb.getY(),pb.getZ()+0.5);
+			r=PlotEnterTracker.update(guest);
+			h.assertTrue(r.kind()==PlotEnterTracker.Kind.ENTER&&r.id().equals(b),"A to B reports only the entry of B");
+			guest.setPos(far.getX()+0.5,far.getY(),far.getZ()+0.5);
+			r=PlotEnterTracker.update(guest);
+			h.assertTrue(r.kind()==PlotEnterTracker.Kind.LEAVE&&r.id().equals(b),"leaving is reported");
+			owner.setPos(pa.getX()+0.5,pa.getY(),pa.getZ()+0.5);
+			h.assertTrue(PlotEnterTracker.update(owner).kind()==PlotEnterTracker.Kind.NONE,"owner gets no message");
+		} finally { config.city.claimsEnabled=enabled;plots.remove(a);plots.remove(b);PlotEnterTracker.reset(); }
+		h.succeed();
+	}
 }

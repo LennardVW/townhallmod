@@ -131,11 +131,18 @@ public final class PlotCommand {
 	}
 	private static Optional<Map.Entry<String,Plot>> resolve(CommandSourceStack s,String id) {
 		var storage = PlotStorage.get(s.getServer());
-		return id==null ? storage.at(s.getLevel().dimension().identifier().toString(),BlockPos.containing(s.getPosition())) : Optional.ofNullable(storage.plots().get(id)).map(p -> Map.entry(id,p));
+		if(id!=null) return Optional.ofNullable(storage.plots().get(id)).map(p -> Map.entry(id,p));
+		var here = storage.at(s.getLevel().dimension().identifier().toString(),BlockPos.containing(s.getPosition()));
+		// nicht auf einem Grundstück: das eigene nehmen (Eigentümer/Miteigentümer), damit /plot coowner add Anna auch daneben klappt
+		if(here.isPresent() || s.getPlayer()==null) return here;
+		// Quelle kann von der Spielerposition abweichen (Multiworld-Mods): dann die echte Position des Spielers prüfen
+		ServerPlayer player = s.getPlayer();
+		here = storage.at(player.level().dimension().identifier().toString(),player.blockPosition());
+		return here.isPresent() ? here : storage.ownedBy(player.getUUID());
 	}
 	private static int update(CommandContext<CommandSourceStack> c,Level level,java.util.function.UnaryOperator<Plot> change,String detail) {
 		var s = c.getSource(); var entry = resolve(s,optionalId(c));
-		if(entry.isEmpty()) return Feedback.fail(s,optionalId(c)==null ? "Hier ist kein Grundstück eingerichtet. Stell dich auf das Grundstück oder gib die Kennung an." : "Unbekanntes Grundstück.");
+		if(entry.isEmpty()) return Feedback.fail(s,optionalId(c)==null ? "Du stehst auf keinem Grundstück und besitzt keins. Stell dich auf das Grundstück oder gib die Kennung an." : "Unbekanntes Grundstück.");
 		if(!mayManage(s,entry.get().getValue(),level)) return Feedback.fail(s,level==Level.ADMIN ? "Das dürfen nur Admins." : level==Level.MAIN ? "Das darf nur der Haupt-Eigentümer dieses Grundstücks." : level==Level.OWNER ? "Das darf nur ein Eigentümer dieses Grundstücks." : "Du darfst dieses Grundstück nicht verwalten.");
 		PlotStorage.get(s.getServer()).put(entry.get().getKey(),change.apply(entry.get().getValue()));
 		return changed(s,"plot.update",entry.get().getKey() + ": " + detail);
@@ -239,7 +246,7 @@ public final class PlotCommand {
 		var s = c.getSource(); var profiles = GameProfileArgument.getGameProfiles(c,"player");
 		if(profiles.size()!=1) return Feedback.fail(s,"Genau einen Spieler angeben.");
 		var entry = resolve(s,optionalId(c));
-		if(entry.isEmpty()) return Feedback.fail(s,optionalId(c)==null ? "Hier ist kein Grundstück eingerichtet. Stell dich auf das Grundstück oder gib die Kennung an." : "Unbekanntes Grundstück.");
+		if(entry.isEmpty()) return Feedback.fail(s,optionalId(c)==null ? "Du stehst auf keinem Grundstück und besitzt keins. Stell dich auf das Grundstück oder gib die Kennung an." : "Unbekanntes Grundstück.");
 		String id = entry.get().getKey(); Plot p = entry.get().getValue();
 		if(!mayManage(s,p,Level.MAIN)) return Feedback.fail(s,"Das darf nur der Haupt-Eigentümer dieses Grundstücks.");
 		if(p.owner().isEmpty()) return Feedback.fail(s,"Eine öffentliche Fläche hat keinen Eigentümer, dem man jemanden zuordnen könnte.");

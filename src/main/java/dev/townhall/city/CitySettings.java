@@ -6,6 +6,7 @@ import java.util.List;
 public final class CitySettings {
 	public boolean claimsEnabled = false;
 	public int claimChunksPerPlayer = 1;
+	public boolean plotEnterTitles = true;
 	public boolean shopsEnabled = true;
 	public boolean rolesInChat = true;
 	public boolean rolesInTab = true;

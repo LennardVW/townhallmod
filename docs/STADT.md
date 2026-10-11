@@ -271,6 +271,8 @@ Ein geladener Laden mit echten Gegenständen in seinem Markierungsfass wird nich
 
 Standardmäßig ist `city.claimsEnabled` false. Ihr könnt zunächst frei bauen und später nur Rathaus, Geschäfte oder einzelne Häuser schützen. Vorbereitete Grundstücke wirken erst nach dem Einschalten.
 
+Betrittst oder verlässt du ein fremdes Grundstück, erscheint ein Titel in der Bildschirmmitte (abschaltbar mit `city.plotEnterTitles`); eigene Grundstücke bleiben still.
+
 Ein Admin geht zu zwei gegenüberliegenden Ecken. Die Höhe ist egal: Der Bereich umfasst Keller bis Himmel.
 
 ```text
@@ -373,6 +375,7 @@ Die Admin-Befehle ändern ihre Einstellungen sofort und speichern sie in `config
 "city": {
   "claimsEnabled": false,
   "claimChunksPerPlayer": 1,
+  "plotEnterTitles": true,
   "shopsEnabled": true,
   "rolesInChat": true,
   "rolesInTab": true,
