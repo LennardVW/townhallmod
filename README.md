@@ -6,7 +6,7 @@ Townhall fasst die Dinge zusammen, für die man sonst mehrere Plugins bräuchte:
 
 Die Mod läuft nur auf dem Server. Spieler joinen mit einem ganz normalen Minecraft-Client und müssen nichts installieren.
 
-Aktuelle Version: **1.16.0**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: **1.16.1**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md). Der [Prüfbericht zum Admin-Schlüssel-Fix](docs/VALIDIERUNG-1.16.1.md) beschreibt Tests und Grenzen.
 
 Bauhelfer können jetzt Litematica-Schematics in ihrer Bauwelt ohne OP automatisch platzieren. [Einrichtung und Anleitung](docs/LITEMATICA.md), [Prüfbericht](docs/VALIDIERUNG-1.16.0.md).
 
@@ -306,10 +306,12 @@ Die Spielerbefehle stehen oben unter [Türen abschließen](#türen-abschließen)
 
 | Befehl | Was er macht |
 |---|---|
-| `/key admin` | Generalschlüssel, der jede abgeschlossene Tür öffnet |
+| `/key admin` | Generalschlüssel: schließt freie Türen ab und öffnet jede abgeschlossene Tür |
 | `/key unlock` | Entfernt das Schloss der Tür, die du gerade anschaust |
 
-Der Generalschlüssel wirkt nur, solange sein Besitzer Admin ist. Findet ein normaler Spieler einen verlorenen Generalschlüssel, kann er damit nichts öffnen.
+Der Generalschlüssel wirkt nur, solange sein Besitzer Admin ist. Findet ein normaler Spieler einen verlorenen Generalschlüssel, kann er damit keine Tür abschließen oder öffnen.
+
+Mit dem Generalschlüssel in der Haupthand eine freie Tür rechtsklicken, um sie abzuschließen. Solche Türen sind nur mit einem Generalschlüssel und Admin-Rechten zugänglich. An einer bereits abgeschlossenen Tür bleibt das ursprüngliche Schloss unverändert – auch beim Schleichen. Der Hausschlüssel des Besitzers funktioniert weiter. Nur `/key unlock` entfernt das Schloss ausdrücklich. Eine tatsächlich geöffnete Tür bleibt für alle sichtbar und passierbar; es gibt keine private Türöffnung pro Spieler. Alte Generalschlüssel funktionieren ohne Neuerstellung.
 
 ### Nicknamen
 
