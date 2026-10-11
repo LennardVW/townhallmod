@@ -172,6 +172,9 @@ public final class TownhallCommand {
 				.then(Commands.literal("deathsintab").requires(op)
 						.then(Commands.literal("on").executes(ctx -> setDeathsInTab(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setDeathsInTab(ctx, false))))
+				.then(Commands.literal("end").requires(op).executes(TownhallCommand::showEnd)
+						.then(Commands.literal("on").executes(ctx -> setEnd(ctx, true)))
+						.then(Commands.literal("off").executes(ctx -> setEnd(ctx, false))))
 				.then(Commands.literal("debug").requires(op)
 						.then(Commands.argument("player", GameProfileArgument.gameProfile()).executes(TownhallCommand::debug)))
 				.then(Commands.literal("clearreturn").requires(op)
@@ -301,6 +304,18 @@ public final class TownhallCommand {
 		}
 		dimension.then(weather);
 		return Commands.literal("worldrule").then(dimension);
+	}
+
+	private static int setEnd(CommandContext<CommandSourceStack> ctx, boolean on) {
+		TownhallMod.CONFIG.get().endEnabled = on;
+		if (!saveConfig(ctx.getSource())) return 0;
+		return showEnd(ctx);
+	}
+
+	private static int showEnd(CommandContext<CommandSourceStack> ctx) {
+		return ok(ctx.getSource(), TownhallMod.CONFIG.get().endEnabled
+				? "The End is open: end portals work."
+				: "The End is closed: end portals do nothing. Ops can still /tp there; the way back works.");
 	}
 
 	private static int setDeathsInTab(CommandContext<CommandSourceStack> ctx, boolean on) {

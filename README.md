@@ -365,6 +365,7 @@ Oben in der Tab-Liste steht **AzubiCraft** mit einer Begrüßung, unten stehen O
 | `/tablist header &6&lAzubiCraft\|&7Hallo {player}!` | Kopfzeile setzen. `\|` beginnt eine neue Zeile, `-` bedeutet leer. |
 | `/tablist footer &7Online: {online}/{max}` | Fußzeile setzen |
 | `/tablist off` | Kopf- und Fußzeile ausschalten (`on` schaltet sie wieder ein). Danach sendet die Mod nichts mehr, Tab-Listen anderer Mods bleiben stehen. |
+| `/townhall end on\|off` | Endportale öffnen oder sperren (Standard: gesperrt). Ohne Wert zeigt der Befehl den Stand. Wer im End ist, bleibt; der Rückweg geht immer. |
 | `/townhall deathsintab off` | Todeszahl ausblenden (`on` zeigt sie wieder) |
 
 Platzhalter für Kopf- und Fußzeile: `{player}`, `{online}`, `{max}`, `{ping}`, `{playtime}`, `{world}`.
@@ -418,6 +419,7 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 | `confinement.allowedCommands` | `msg`, `tell`, `w`, `r`, `me`, `teammsg`, `tm`, `list`, `help`, `trigger` | Befehle, die Gefangene benutzen dürfen |
 | `dimensions` | leer | Regeln pro Welt, siehe oben |
 | `deathsInTab` | `true` | Rote Todeszahl in der Tab-Liste |
+| `endEnabled` | `false` | `false` sperrt Endportale (Betreten des Endes), `/townhall end on` öffnet sie |
 | `afkMinutes` | `5` | Minuten bis AFK, `0` nur manuell |
 | `joinMessages.*` | AzubiCraft-Texte | Join-, Leave- und Erstjoin-Nachrichten, eigene Nachrichten pro Spieler |
 | `tabList.*` | AzubiCraft-Kopf- und Fußzeile | Zeilen mit Platzhaltern |
@@ -507,7 +509,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 | Bauer | `/builder add <welt> <spieler>`, `/builder remove <welt> <spieler>`, `/builder list [welt]` |
 | Schlüssel | `/key admin`, `/key unlock` |
 | Nicknamen | `/nick set <spieler> <nick>`, `/nick reset <spieler>`, `/nick list` |
-| Anzeige | `/joinmessage ...`, `/tablist ...`, `/townhall deathsintab on\|off`, `/townhall afktime <minuten>` |
+| Anzeige | `/joinmessage ...`, `/tablist ...`, `/townhall deathsintab on\|off`, `/townhall end on\|off`, `/townhall afktime <minuten>` |
 | Regeln | `/rules reset <spieler>` |
 
 ---

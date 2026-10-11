@@ -38,6 +38,8 @@ public final class TownhallConfig {
 	public boolean debugLogging = false;
 	/** Red number of deaths next to every name in the tab list. */
 	public boolean deathsInTab = true;
+	/** False = end portals don't lead to the End (ops can still /tp there). */
+	public boolean endEnabled = false;
 	/** Minutes without activity until a player is shown as AFK (0 = only with /afk). */
 	public int afkMinutes = 5;
 	public JoinMessages joinMessages = new JoinMessages();

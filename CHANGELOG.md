@@ -2,6 +2,12 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.17.2 – End abschaltbar
+
+- Neuer Admin-Befehl `/townhall end on|off`; `/townhall end` zeigt den Stand. Config `endEnabled`, Standard **aus**: Endportale führen dann nicht ins End, wer hineinläuft sieht in der Actionbar „Das End ist noch geschlossen.“ (höchstens alle 3 Sekunden).
+- Wer schon im End ist, wird nicht entfernt, Admins kommen per `/tp` hinein, und der Rückweg (Exit-Portal im End) funktioniert immer.
+- Alte Configs ohne `endEnabled` laden unverändert, das End ist dann zu.
+
 ## 1.17.1 – Meldung beim Betreten fremder Grundstücke
 
 - Wer ein fremdes Grundstück betritt, sieht in der Bildschirmmitte „Grundstück von <Name>“ mit der Grundstücks-ID darunter, auf öffentlicher Fläche die ID mit „Öffentliche Fläche“. Beim Verlassen erscheint „Du verlässt das Grundstück von <Name>“. Eigene Grundstücke (Eigentümer, Miteigentümer, Manager, Mitbauer) bleiben still. Nur bei aktivem Grundstücksschutz; abschaltbar mit `city.plotEnterTitles` (Standard an).

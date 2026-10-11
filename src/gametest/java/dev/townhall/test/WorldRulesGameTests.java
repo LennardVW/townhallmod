@@ -108,6 +108,27 @@ public class WorldRulesGameTests {
 		level.updateSkyBrightness();
 	}
 
+	@GameTest
+	public void endPortalSwitch(GameTestHelper h) {
+		MinecraftServer server = h.getLevel().getServer();
+		boolean before = TownhallMod.CONFIG.get().endEnabled;
+		try {
+			console(server, "townhall end off");
+			h.assertFalse(TownhallMod.CONFIG.get().endEnabled, "end off by command");
+			h.assertTrue(dev.townhall.dimension.EndGate.blocks(h.getLevel()), "closed End: portal in the overworld blocked");
+			h.assertFalse(dev.townhall.dimension.EndGate.blocks(false, true), "exit portal inside the End is never blocked");
+			console(server, "townhall end on");
+			h.assertTrue(TownhallMod.CONFIG.get().endEnabled, "end on by command");
+			h.assertFalse(dev.townhall.dimension.EndGate.blocks(h.getLevel()), "open End: portal allowed");
+			Class.forName("net.minecraft.world.level.block.EndPortalBlock");
+		} catch (ClassNotFoundException e) {
+			throw new AssertionError(e);
+		} finally {
+			TownhallMod.CONFIG.get().endEnabled = before;
+		}
+		h.succeed();
+	}
+
 	// ------------------------------------------------------------ S1
 
 	@GameTest

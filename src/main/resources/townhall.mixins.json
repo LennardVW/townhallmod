@@ -42,6 +42,7 @@
 		"BedSleepMixin",
 		"TrialSpawnerMixin",
 		"NetherPortalBlockMixin",
+		"EndPortalBlockMixin",
 		"RaidsMixin",
 		"RaidMixin",
 		"TimeCheckMixin",
