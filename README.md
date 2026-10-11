@@ -128,6 +128,8 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 | `/key new <name>` | Neuen Türschlüssel mit Namen erzeugen |
 | `/key copy [spieler]` | Den Schlüssel in deiner Hand kopieren, auf Wunsch direkt für einen anderen Spieler |
 | `/key info` | Zeigt, mit welchem Schlüssel die Tür vor dir abgeschlossen ist |
+| `/key delete` | Entfernt das Schloss der Tür, die du anschaust (passender Schlüssel in der Hand). Danach auf [Bestätigen] klicken oder `/key delete confirm` (30 Sekunden, nur für diese Tür) |
+| `/key delete all` | Macht den Schlüssel in deiner Hand für immer ungültig: das Item verschwindet, alle Kopien öffnen nichts mehr, alle Schlösser mit ihm werden frei. Bestätigung mit `/key delete all confirm` (30 Sekunden) |
 
 ### Rathaus: so funktioniert die Rückkehr
 
@@ -143,6 +145,7 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 2. Rechtsklick mit dem Schlüssel auf eine Tür schließt sie ab.
 3. Schleichen und Rechtsklick mit demselben Schlüssel schließt sie wieder auf.
 4. `/key copy Max` gibt Max eine Kopie. Die Kopie öffnet dieselben Türen.
+5. `/key delete` entfernt das Schloss an der Tür vor dir (Schlüssel in der Haupthand, Bestätigung nötig). `/key delete all` widerruft den Schlüssel samt Kopien und Schlössern; widerrufene Schlüssel schließen nie wieder etwas ab, neue Schlüssel bekommen immer eine neue ID. Den Generalschlüssel kann man nicht widerrufen.
 
 Es reicht, wenn der Schlüssel irgendwo im Inventar liegt. Du musst ihn nicht in der Hand halten. Ohne passenden Schlüssel lässt sich die Tür weder öffnen noch abbauen, und auch Knöpfe, Hebel, Redstone und Dorfbewohner öffnen sie nicht. Das funktioniert mit Holz-, Kupfer- und Eisentüren.
 
@@ -493,7 +496,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 
 ## Alle Befehle auf einen Blick
 
-**Alle Spieler:** `/townhall`, `/townhall return`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`
+**Alle Spieler:** `/townhall`, `/townhall return`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`, `/key delete`, `/key delete all`
 
 **Stadtfunktionen:** Alle Befehle für Rollen, Polizei, Wahlen, Läden, Grundstücke und Protokoll stehen in [docs/STADT.md](docs/STADT.md).
 

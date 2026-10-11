@@ -7,6 +7,10 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.townhall.TownhallMod;
 import dev.townhall.key.DoorLocks;
 import dev.townhall.key.Keys;
+import dev.townhall.key.RevokedKeys;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -36,6 +40,8 @@ import static dev.townhall.command.Feedback.ok;
  * /key copy [player]      everyone: copy of the key in your hand (for you or another player)
  * /key info               everyone: which key locks the door you look at
  * /key admin              operator: admin key that locks and opens every door
+ * /key delete            everyone: remove the lock of the door you look at (hold the matching key), needs /key delete confirm
+ * /key delete all         everyone: make the key in your hand invalid for good, needs /key delete all confirm
  * /key unlock             operator: remove the lock of the door you look at
  * </pre>
  */
@@ -45,6 +51,11 @@ public final class KeyCommand {
 	static final long COOLDOWN_MILLIS = 10_000;
 	private static final Map<UUID, Long> LAST_NEW = new HashMap<>();
 	private static final Map<UUID, Long> LAST_COPY = new HashMap<>();
+
+	/** A delete waiting for confirmation (30 s). door == null means "delete all" for keyId. */
+	private record Pending(ResourceKey<Level> dimension, BlockPos door, UUID keyId, long expires) {}
+	static final long CONFIRM_MILLIS = 30_000;
+	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 
 	private KeyCommand() {}
 
@@ -63,6 +74,7 @@ public final class KeyCommand {
 	public static void reset() {
 		LAST_NEW.clear();
 		LAST_COPY.clear();
+		PENDING.clear();
 	}
 
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -71,6 +83,10 @@ public final class KeyCommand {
 				.then(Commands.literal("copy").executes(ctx -> copy(ctx, null))
 						.then(Commands.argument("player", EntityArgument.player()).executes(ctx -> copy(ctx, EntityArgument.getPlayer(ctx, "player")))))
 				.then(Commands.literal("info").executes(KeyCommand::info))
+				.then(Commands.literal("delete").executes(ctx -> deleteAsk(ctx, false))
+						.then(Commands.literal("confirm").executes(ctx -> deleteDoorConfirm(ctx)))
+						.then(Commands.literal("all").executes(ctx -> deleteAsk(ctx, true))
+								.then(Commands.literal("confirm").executes(KeyCommand::deleteAllConfirm))))
 				.then(Commands.literal("admin").requires(TownhallCommand::isOperator).executes(KeyCommand::admin))
 				.then(Commands.literal("unlock").requires(TownhallCommand::isOperator).executes(KeyCommand::unlock)));
 	}
@@ -126,6 +142,74 @@ public final class KeyCommand {
 		if (!DoorLocks.get(player.level().getServer()).remove(player.level().dimension(), door.get())) return fail(ctx.getSource(), "This door is not locked.");
 		TownhallMod.LOGGER.info("{} removed the lock of the door at {}", player.getPlainTextName(), door.get().toShortString());
 		return ok(ctx.getSource(), "Lock removed.");
+	}
+
+	private static Component confirmButton(String text, String command) {
+		return Component.literal(text + " ").withStyle(ChatFormatting.YELLOW)
+				.append(Component.literal("[Confirm]").withStyle(st -> st.withColor(ChatFormatting.GREEN).withBold(true).withClickEvent(new ClickEvent.RunCommand(command))));
+	}
+
+	private static int deleteAsk(CommandContext<CommandSourceStack> ctx, boolean all) throws CommandSyntaxException {
+		CommandSourceStack source = ctx.getSource();
+		ServerPlayer player = source.getPlayerOrException();
+		ItemStack held = player.getMainHandItem();
+		if (all) {
+			Optional<UUID> id = Keys.keyId(held);
+			if (Keys.isAdminKey(held)) return fail(source, "The admin key can't be deleted.");
+			if (id.isEmpty()) return fail(source, "Hold a key in your main hand.");
+			PENDING.put(player.getUUID(), new Pending(null, null, id.get(), System.currentTimeMillis() + CONFIRM_MILLIS));
+			source.sendSuccess(() -> confirmButton("Make the key \"" + Keys.keyName(held) + "\" invalid for good? All copies stop working and every lock with it is removed.", "/key delete all confirm"), false);
+			return 1;
+		}
+		if (Keys.keyId(held).isEmpty() && !Keys.isAdminKey(held)) return fail(source, "Hold a key in your main hand.");
+		Optional<BlockPos> door = lookedAtDoor(player);
+		if (door.isEmpty()) return fail(source, "Look at a door.");
+		Optional<DoorLocks.Lock> lock = Keys.lockAt(player.level(), door.get());
+		if (lock.isEmpty()) return fail(source, "This door is not locked.");
+		if (!Keys.mayDelete(player, held, lock.get())) return fail(source, "This key doesn't fit the lock of this door.");
+		PENDING.put(player.getUUID(), new Pending(player.level().dimension(), door.get(), null, System.currentTimeMillis() + CONFIRM_MILLIS));
+		source.sendSuccess(() -> confirmButton("Remove the lock of the door at " + door.get().toShortString() + "?", "/key delete confirm"), false);
+		return 1;
+	}
+
+	private static Pending takePending(ServerPlayer player, boolean all) {
+		Pending p = PENDING.get(player.getUUID());
+		if (p == null || (p.door() == null) != all) return null;
+		PENDING.remove(player.getUUID());
+		return System.currentTimeMillis() <= p.expires() ? p : null;
+	}
+
+	private static int deleteDoorConfirm(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		CommandSourceStack source = ctx.getSource();
+		ServerPlayer player = source.getPlayerOrException();
+		Pending p = takePending(player, false);
+		if (p == null) return fail(source, "Nothing to confirm. Run /key delete again (valid for 30 s).");
+		Optional<BlockPos> door = lookedAtDoor(player);
+		if (door.isEmpty() || !door.get().equals(p.door()) || !player.level().dimension().equals(p.dimension())) return fail(source, "Look at the same door you chose. Run /key delete again.");
+		Optional<DoorLocks.Lock> lock = Keys.lockAt(player.level(), door.get());
+		if (lock.isEmpty()) return fail(source, "This door is not locked.");
+		if (!Keys.mayDelete(player, player.getMainHandItem(), lock.get())) return fail(source, "This key doesn't fit the lock of this door.");
+		DoorLocks.get(player.level().getServer()).remove(player.level().dimension(), door.get());
+		dev.townhall.audit.AuditLog.record(player.level().getServer(), player, "key.delete", "Tür " + door.get().toShortString());
+		TownhallMod.LOGGER.info("{} deleted the lock of the door at {} with a key", player.getPlainTextName(), door.get().toShortString());
+		return ok(source, "Lock removed.");
+	}
+
+	private static int deleteAllConfirm(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		CommandSourceStack source = ctx.getSource();
+		ServerPlayer player = source.getPlayerOrException();
+		Pending p = takePending(player, true);
+		if (p == null) return fail(source, "Nothing to confirm. Run /key delete all again (valid for 30 s).");
+		ItemStack held = player.getMainHandItem();
+		if (!Keys.keyId(held).filter(p.keyId()::equals).isPresent() || Keys.isAdminKey(held)) return fail(source, "Hold the same key in your main hand. Run /key delete all again.");
+		String name = Keys.keyName(held);
+		var server = player.level().getServer();
+		RevokedKeys.get(server).revoke(p.keyId());
+		int removed = DoorLocks.get(server).removeByKey(p.keyId().toString());
+		player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+		dev.townhall.audit.AuditLog.record(server, player, "key.delete.all", "Schlüssel " + name + ", " + removed + " Schlösser");
+		TownhallMod.LOGGER.info("{} revoked the key {} ({} locks removed)", player.getPlainTextName(), name, removed);
+		return ok(source, "The key \"" + name + "\" is invalid now. " + removed + " lock(s) removed; copies open nothing anymore.");
 	}
 
 	/** Lower half of the door the player looks at (5 blocks). */

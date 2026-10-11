@@ -1019,6 +1019,89 @@ public class TownhallGameTests {
 	}
 
 	@GameTest
+	public void keyDeleteNeedsMatchingKeyAndConfirm(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var player = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		BlockPos other = new BlockPos(3, 1, 1);
+		try {
+			keyTestDoor(h, lower, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			keyTestDoor(h, other, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			var key = dev.townhall.key.Keys.newKey("Haus");
+			lock(h.getLevel(), h.absolutePos(lower), key);
+			lock(h.getLevel(), h.absolutePos(other), key);
+			var abs = h.absolutePos(lower);
+			player.absSnapTo(abs.getX() + 0.5, abs.getY(), abs.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.newKey("Falsch"));
+			capture(player.createCommandSourceStack(), "key delete");
+			capture(player.createCommandSourceStack(), "key delete confirm");
+			h.assertTrue(locked(h.getLevel(), abs), "wrong key keeps the lock");
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.copy(key));
+			capture(player.createCommandSourceStack(), "key delete");
+			h.assertTrue(locked(h.getLevel(), abs), "no confirm, lock stays");
+			var o = h.absolutePos(other);
+			player.absSnapTo(o.getX() + 0.5, o.getY(), o.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			capture(player.createCommandSourceStack(), "key delete confirm");
+			h.assertTrue(locked(h.getLevel(), abs) && locked(h.getLevel(), o), "confirm at another door is refused");
+			player.absSnapTo(abs.getX() + 0.5, abs.getY(), abs.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			capture(player.createCommandSourceStack(), "key delete");
+			capture(player.createCommandSourceStack(), "key delete confirm");
+			h.assertFalse(locked(h.getLevel(), abs), "matching key removes the lock after confirm");
+			h.assertTrue(locked(h.getLevel(), o), "other door untouched");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(other));
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void keyDeleteAllRevokesKey(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var player = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		var id = java.util.Optional.<UUID>empty();
+		net.minecraft.world.item.ItemStack key0 = net.minecraft.world.item.ItemStack.EMPTY;
+		try {
+			keyTestDoor(h, lower, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			var key = dev.townhall.key.Keys.newKey("Haus");
+			id = dev.townhall.key.Keys.keyId(key);
+			key0 = key.copy();
+			var abs = h.absolutePos(lower);
+			lock(h.getLevel(), abs, key);
+			player.absSnapTo(abs.getX() + 0.5, abs.getY(), abs.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, key);
+			capture(player.createCommandSourceStack(), "key delete all");
+			h.assertFalse(dev.townhall.key.RevokedKeys.get(server).isRevoked(id.get()), "no confirm, nothing happens");
+			h.assertTrue(locked(h.getLevel(), abs) && !player.getMainHandItem().isEmpty(), "no confirm keeps lock and item");
+			capture(player.createCommandSourceStack(), "key delete all confirm");
+			h.assertTrue(player.getMainHandItem().isEmpty(), "key item removed");
+			h.assertFalse(locked(h.getLevel(), abs), "lock freed");
+			// persists through the codec (reload)
+			var encoded = dev.townhall.key.RevokedKeys.CODEC.encodeStart(NbtOps.INSTANCE, dev.townhall.key.RevokedKeys.get(server)).getOrThrow();
+			h.assertTrue(dev.townhall.key.RevokedKeys.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow().isRevoked(id.get()), "revoked id survives reload");
+			// a copy cannot lock again, a lock with the revoked id counts as not locked
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.copy(key0));
+			useDoor(h, player, lower);
+			h.assertFalse(locked(h.getLevel(), abs), "revoked copy cannot lock");
+			lock(h.getLevel(), abs, dev.townhall.key.Keys.copy(key0));
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), abs).isEmpty(), "stale lock with revoked id is not locked");
+			// a new key works
+			var fresh = dev.townhall.key.Keys.newKey("Neu");
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, fresh);
+			h.assertTrue(useDoor(h, player, lower).consumesAction(), "new key locks the door");
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), abs).isPresent(), "new lock set");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+		}
+		h.succeed();
+	}
+
+	@GameTest
 	public void adminKeyPreservesOriginalOwnersLock(GameTestHelper h) {
 		var server = h.getLevel().getServer();
 		var owner = h.makeMockServerPlayerInLevel();

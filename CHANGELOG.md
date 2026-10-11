@@ -2,6 +2,12 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.17.3 – Schlüssel löschen
+
+- Neu `/key delete`: entfernt das Schloss der Tür, die man anschaut, wenn man den passenden Schlüssel in der Haupthand hält (Generalschlüssel: jedes Schloss). Vorher kommt eine Rückfrage mit klickbarem [Bestätigen], gültig 30 Sekunden und nur für dieselbe Tür.
+- Neu `/key delete all`: macht den Schlüssel in der Hand für immer ungültig. Das Item verschwindet, alle Schlösser mit diesem Schlüssel werden frei, Kopien öffnen und schließen nichts mehr (gespeicherte Liste widerrufener Schlüssel, bleibt nach Neustart). Bestätigung mit `/key delete all confirm` binnen 30 Sekunden. Der Generalschlüssel lässt sich nicht widerrufen.
+- Beide Aktionen stehen im Audit-Log.
+
 ## 1.17.2 – End abschaltbar
 
 - Neuer Admin-Befehl `/townhall end on|off`; `/townhall end` zeigt den Stand. Config `endEnabled`, Standard **aus**: Endportale führen dann nicht ins End, wer hineinläuft sieht in der Actionbar „Das End ist noch geschlossen.“ (höchstens alle 3 Sekunden).

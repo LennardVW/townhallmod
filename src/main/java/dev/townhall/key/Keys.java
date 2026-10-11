@@ -81,7 +81,7 @@ public final class Keys {
 	// ------------------------------------------------------------ items
 
 	public static ItemStack newKey(String name) {
-		return keyItem(UUID.randomUUID(), name);
+		return keyItem(UUID.randomUUID(), name); // random v4 UUID: never collides with a revoked id
 	}
 
 	static ItemStack keyItem(UUID id, String name) {
@@ -159,6 +159,10 @@ public final class Keys {
 		DoorLocks locks = DoorLocks.get(level.getServer());
 		if (locks.size() == 0) return Optional.empty(); // most servers have no locks: DoorBlockMixin asks on every neighbor update
 		Optional<DoorLocks.Lock> lock = locks.get(level.dimension(), lower);
+		if (lock.isPresent() && RevokedKeys.get(level.getServer()).isRevoked(lock.get().keyId())) {
+			locks.remove(level.dimension(), lower); // key was deleted with /key delete all
+			return Optional.empty();
+		}
 		if (lock.isPresent() && !(level.getBlockState(lower).getBlock() instanceof DoorBlock)) {
 			locks.remove(level.dimension(), lower);
 			return Optional.empty();
@@ -203,6 +207,18 @@ public final class Keys {
 		});
 	}
 
+	/** May this player remove this lock with /key delete: the held key matches, or an operator holds the admin key. */
+	public static boolean mayDelete(ServerPlayer player, ItemStack held, DoorLocks.Lock lock) {
+		if (isAdminKey(held)) return TownhallMod.isOperator(player.permissions());
+		Optional<UUID> id = keyId(held);
+		return id.isPresent() && !id.get().equals(ADMIN_LOCK_ID) && id.get().equals(lock.key());
+	}
+
+	/** Ordinary key id of this stack (not the admin id), if it is still valid. */
+	public static boolean isRevoked(ServerPlayer player, UUID id) {
+		return RevokedKeys.get(player.level().getServer()).isRevoked(id);
+	}
+
 	public static boolean mayOpen(ServerPlayer player, DoorLocks.Lock lock) {
 		if (!lock.key().equals(ADMIN_LOCK_ID) && carriesKey(player, lock.key())) return true;
 		return TownhallMod.isOperator(player.permissions()) && player.getInventory().contains(Keys::isAdminKey);
@@ -215,7 +231,7 @@ public final class Keys {
 		ItemStack held = player.getMainHandItem();
 		boolean heldAdmin = isAdminKey(held) && TownhallMod.isOperator(player.permissions());
 		Optional<UUID> heldKey = heldAdmin ? Optional.of(ADMIN_LOCK_ID)
-				: isAdminKey(held) ? Optional.empty() : keyId(held).filter(id -> !id.equals(ADMIN_LOCK_ID));
+				: isAdminKey(held) ? Optional.empty() : keyId(held).filter(id -> !id.equals(ADMIN_LOCK_ID) && !isRevoked(player, id));
 		String heldName = heldAdmin ? "Admin Key" : keyName(held);
 		Optional<DoorLocks.Lock> lock = lockAt(level, lower);
 

@@ -72,6 +72,13 @@ public final class DoorLocks extends SavedData {
 		return removed;
 	}
 
+	/** Removes every lock made with this key id (key revoked); returns how many. */
+	public int removeByKey(String keyId) {
+		int before = locks.size();
+		if (locks.values().removeIf(l -> l.keyId().equals(keyId))) setDirty();
+		return before - locks.size();
+	}
+
 	public int size() {
 		return locks.size();
 	}
