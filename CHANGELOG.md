@@ -2,6 +2,14 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.18.0 – Zuhause und Teleportanfragen
+
+- Neu `/sethome [name]`, `/home [name]`, `/delhome [name]` und `/homes`. Gespeichert werden Welt, Position und Blickrichtung. Standardname ist `home`; am Limit `homes.maxHomes` (Standard 1) kann nur ein Zuhause gleichen Namens überschrieben werden. Im Gefängnis und an Orten, die man nicht verlassen darf, gibt es kein `/sethome` und kein `/home`.
+- Neu `/tpa <spieler>`, `/tpahere <spieler>`, `/tpaccept [spieler]`, `/tpdeny [spieler]`, `/tpacancel` und `/tpatoggle`. Eine Anfrage gilt 60 Sekunden, pro Anfragendem ist eine offen; das Ziel bekommt klickbare Knöpfe [Annehmen] und [Ablehnen].
+- Wartezeit vor `/home` und angenommenem `/tpa`: 3 Sekunden stillstehen (`teleport.warmupSeconds`, 0 = aus). Ein Countdown „3, 2, 1“ erscheint in der Bildschirmmitte, Partikel kreisen um den Spieler. Bewegung (mehr als 0,2 Blöcke), Schaden, Tod, Ausloggen oder Weltwechsel brechen ab. Kopfdrehen ist erlaubt. Das Ziel wird nach Ablauf nochmals geprüft.
+- Dieselbe Anzeige (Titel und Partikel) läuft jetzt auch bei `/townhall return`, dort bleibt das Einfrieren.
+- Pause von 30 Sekunden zwischen zwei Teleports (`teleport.cooldownSeconds`). Operatoren warten weder noch haben sie eine Pause. Gefangene und Spieler, die die Regeln noch nicht akzeptiert haben, können nichts davon nutzen.
+
 ## 1.17.4 – Rückkehr mit Wartezeit, feuerfeste Schlösser
 
 - `/townhall return` (und `/<ort> return`) teleportiert nicht mehr sofort: Du bleibst 3 Sekunden an deiner Stelle eingefroren (Bewegung wird zurückgesetzt), in der Actionbar läuft der Countdown „Rückkehr in 3 … 2 … 1“. Danach geht es zurück. Ein zweiter Aufruf meldet „Du kehrst schon zurück.“; Ausloggen, Tod oder Weltwechsel brechen ab. Operatoren warten nicht, `/townhall return <spieler>` bleibt sofort. Einstellbar mit `return.returnFreezeSeconds` (Standard 3, 0 = aus).

@@ -30,6 +30,8 @@ public final class TownhallConfig {
 	public SafeTeleport safeTeleport = new SafeTeleport();
 	public Fallback fallback = new Fallback();
 	public Commands commands = new Commands();
+	public Homes homes = new Homes();
+	public Teleport teleport = new Teleport();
 	public Confinement confinement = new Confinement();
 	public Onboarding onboarding = new Onboarding();
 	/** Rules per dimension id (any world, also ones added by other mods), e.g. "minecraft:flatworld": {"difficulty": "peaceful"}. */
@@ -125,6 +127,18 @@ public final class TownhallConfig {
 		public String dimension = "minecraft:overworld";
 		public boolean useWorldSpawn = true;
 		public Spot position = new Spot(0.5, 70.0, 0.5, 0f, 0f);
+	}
+
+	public static final class Homes {
+		/** Homes per player (/sethome); at the limit only a home of the same name can be overwritten. */
+		public int maxHomes = 1;
+	}
+
+	public static final class Teleport {
+		/** Seconds a player must stand still before /home or an accepted /tpa teleports (operators never wait); 0 = off. */
+		public int warmupSeconds = 3;
+		/** Seconds between two /home or /tpa teleports of a player (operators exempt); 0 = off. */
+		public int cooldownSeconds = 30;
 	}
 
 	public static final class Commands {
@@ -399,6 +413,13 @@ public final class TownhallConfig {
 		else {
 			if (commands.cooldownSeconds < 0) errors.add("commands.cooldownSeconds muss >= 0 sein");
 			if (commands.operatorPermissionLevel < 1 || commands.operatorPermissionLevel > 4) errors.add("commands.operatorPermissionLevel muss 1-4 sein");
+		}
+		if (homes == null) errors.add("homes fehlt");
+		else if (homes.maxHomes < 1 || homes.maxHomes > 100) errors.add("homes.maxHomes muss 1-100 sein");
+		if (teleport == null) errors.add("teleport fehlt");
+		else {
+			if (teleport.warmupSeconds < 0 || teleport.warmupSeconds > 60) errors.add("teleport.warmupSeconds muss 0-60 sein");
+			if (teleport.cooldownSeconds < 0) errors.add("teleport.cooldownSeconds muss >= 0 sein");
 		}
 		if (dimensions == null) dimensions = new LinkedHashMap<>();
 		dimensions.forEach((id, rules) -> {

@@ -156,6 +156,12 @@ public final class TeleportService {
 		return teleport(player, level, safe.get(), yaw, pitch);
 	}
 
+	/** Plain teleport to an exact spot (the caller has already checked it is allowed and safe). */
+	public static boolean moveTo(ServerPlayer player, ServerLevel level, Vec3 pos, float yaw, float pitch) {
+		SafeLocationFinder.loadChunks(level, pos, 0);
+		return teleport(player, level, pos, yaw, pitch);
+	}
+
 	private static boolean teleport(ServerPlayer player, ServerLevel level, Vec3 pos, float yaw, float pitch) {
 		if (player.isPassenger()) player.stopRiding();
 		boolean ok = player.teleportTo(level, pos.x, pos.y, pos.z, Set.of(), yaw, pitch, true);

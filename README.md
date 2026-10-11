@@ -120,6 +120,9 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 |---|---|
 | `/townhall` | Du gehst ins Rathaus. Deine aktuelle Stelle wird gespeichert. |
 | `/townhall return` | Du kommst an die gespeicherte Stelle zurück. |
+| `/sethome [name]`, `/home [name]`, `/delhome [name]`, `/homes` | Zuhause setzen, hinfliegen, löschen, auflisten (Standardname `home`, Anzahl über `homes.maxHomes`). Vor dem Teleport musst du 3 Sekunden stillstehen. |
+| `/tpa <spieler>`, `/tpahere <spieler>` | Teleportanfrage senden (60 Sekunden gültig, eine offene pro Spieler). Das Ziel klickt auf [Annehmen] oder [Ablehnen]. |
+| `/tpaccept [spieler]`, `/tpdeny [spieler]`, `/tpacancel`, `/tpatoggle` | Anfrage annehmen, ablehnen, zurückziehen; Anfragen sperren oder wieder erlauben |
 | `/rules` oder `/regeln` | Serverregeln anzeigen |
 | `/afk` | Dich selbst sofort als AFK melden |
 | `/playtime` | Deine Spielzeit |
@@ -413,6 +416,9 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 |---|---|---|
 | `return.clearAfterSuccessfulReturn` | `true` | Gespeicherte Stelle nach der Rückkehr löschen |
 | `return.returnFreezeSeconds` | `3` | Sekunden, die Spieler vor `/townhall return` eingefroren warten (Ops nicht); `0` = sofort |
+| `homes.maxHomes` | `1` | Zuhause pro Spieler (1 bis 100). Am Limit lässt sich nur eins mit gleichem Namen überschreiben. |
+| `teleport.warmupSeconds` | `3` | Sekunden Stillstehen (Countdown-Titel und Partikel) vor `/home` und angenommenem `/tpa`; Bewegung oder Schaden brechen ab; Ops warten nicht; `0` = aus |
+| `teleport.cooldownSeconds` | `30` | Pause zwischen zwei `/home`- oder `/tpa`-Teleports (Ops nicht); `0` = aus |
 | `safeTeleport.enabled` | `true` | Vor der Rückkehr prüfen, ob die Stelle sicher ist |
 | `safeTeleport.horizontalRadius` / `verticalRadius` | `5` / `5` | Suchradius für einen sicheren Platz (höchstens 16) |
 | `fallback.useWorldSpawn` | `true` | Notfallziel ist der Welt-Spawn |
@@ -461,6 +467,7 @@ Beispiel für Weltregeln in der Datei:
 |---|---|
 | `config/townhall.json` | Alle Einstellungen, Orte, Weltregeln, Bauer, Texte |
 | `<welt>/data/townhall/players.dat` | Gespeicherte Stellen, Gefangene, Restzeiten |
+| `<welt>/data/townhall/homes.dat` | Zuhause der Spieler |
 | `<welt>/data/townhall/onboarding.dat` | Welche Regelversion jeder Spieler akzeptiert hat |
 | `<welt>/data/townhall/nicknames.dat` | Nicknamen |
 | `<welt>/data/townhall/playtime.dat` | Spielzeiten |
@@ -497,7 +504,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 
 ## Alle Befehle auf einen Blick
 
-**Alle Spieler:** `/townhall`, `/townhall return`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`, `/key delete`, `/key delete all`
+**Alle Spieler:** `/townhall`, `/townhall return`, `/sethome`, `/home`, `/delhome`, `/homes`, `/tpa`, `/tpahere`, `/tpaccept`, `/tpdeny`, `/tpacancel`, `/tpatoggle`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`, `/key delete`, `/key delete all`
 
 **Stadtfunktionen:** Alle Befehle für Rollen, Polizei, Wahlen, Läden, Grundstücke und Protokoll stehen in [docs/STADT.md](docs/STADT.md).
 
