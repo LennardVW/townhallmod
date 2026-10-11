@@ -111,6 +111,8 @@ public final class TownhallConfig {
 
 	public static final class Return {
 		public boolean clearAfterSuccessfulReturn = true;
+		/** Seconds a non-operator stands frozen before /townhall return fires; 0 = off. */
+		public int returnFreezeSeconds = 3;
 	}
 
 	public static final class SafeTeleport {
@@ -392,6 +394,7 @@ public final class TownhallConfig {
 				else checkSpot(errors, "fallback.position", fallback.position);
 			}
 		}
+		if (returnSettings != null && returnSettings.returnFreezeSeconds < 0) errors.add("return.returnFreezeSeconds muss >= 0 sein");
 		if (commands == null) errors.add("commands fehlt");
 		else {
 			if (commands.cooldownSeconds < 0) errors.add("commands.cooldownSeconds muss >= 0 sein");

@@ -15,6 +15,7 @@ import dev.townhall.storage.PlayerState;
 import dev.townhall.storage.ReturnLocation;
 import dev.townhall.storage.ReturnPositionStorage;
 import dev.townhall.teleport.ConfinementService;
+import dev.townhall.teleport.ReturnFreeze;
 import dev.townhall.teleport.TeleportService;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -205,15 +206,27 @@ public final class TownhallCommand {
 		ServerPlayer player = requirePlayer(ctx.getSource());
 		if (player == null || onCooldown(ctx.getSource(), player)) return 0;
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		TeleportService.ReturnResult result = TeleportService.returnPlayer(player, config, isOperatorSelf(ctx.getSource()));
-		if (result == TeleportService.ReturnResult.CONFINED) return fail(ctx.getSource(), confinedMessage(config, player));
+		boolean operator = isOperatorSelf(ctx.getSource());
+		int freeze = config.returnSettings.returnFreezeSeconds;
+		if (operator || freeze <= 0) return performReturn(ctx.getSource(), player, config, operator);
+		if (ReturnFreeze.isWaiting(player)) return fail(ctx.getSource(), "Du kehrst schon zurück.");
+		ReturnPositionStorage storage = ReturnPositionStorage.get(player.level().getServer());
+		if (storage.state(player.getUUID()).confined()) return fail(ctx.getSource(), confinedMessage(config, player));
+		if (storage.state(player.getUUID()).returnPosition().isEmpty() && !isStuck(player, config)) return fail(ctx.getSource(), config.messages.noReturnPosition);
+		ReturnFreeze.start(player, freeze, p -> performReturn(p.createCommandSourceStack(), p, TownhallMod.CONFIG.get(), false));
+		return 1;
+	}
+
+	private static int performReturn(CommandSourceStack source, ServerPlayer player, TownhallConfig config, boolean operator) {
+		TeleportService.ReturnResult result = TeleportService.returnPlayer(player, config, operator);
+		if (result == TeleportService.ReturnResult.CONFINED) return fail(source, confinedMessage(config, player));
 		if (result == TeleportService.ReturnResult.NO_POSITION && isStuck(player, config)) {
 			// Someone who reached a location another way must not get stuck there.
 			return releaseToFallback(player, config)
-					? ok(ctx.getSource(), config.messages.noReturnPosition + " Du wurdest stattdessen zum Spawn geschickt.")
-					: fail(ctx.getSource(), "Teleport fehlgeschlagen. Sag bitte einem Operator Bescheid.");
+					? ok(source, config.messages.noReturnPosition + " Du wurdest stattdessen zum Spawn geschickt.")
+					: fail(source, "Teleport fehlgeschlagen. Sag bitte einem Operator Bescheid.");
 		}
-		return reportReturn(ctx.getSource(), config, result, null);
+		return reportReturn(source, config, result, null);
 	}
 
 	// ------------------------------------------------------------ operator commands

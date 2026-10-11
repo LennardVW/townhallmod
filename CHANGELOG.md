@@ -2,6 +2,11 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.17.4 – Rückkehr mit Wartezeit, feuerfeste Schlösser
+
+- `/townhall return` (und `/<ort> return`) teleportiert nicht mehr sofort: Du bleibst 3 Sekunden an deiner Stelle eingefroren (Bewegung wird zurückgesetzt), in der Actionbar läuft der Countdown „Rückkehr in 3 … 2 … 1“. Danach geht es zurück. Ein zweiter Aufruf meldet „Du kehrst schon zurück.“; Ausloggen, Tod oder Weltwechsel brechen ab. Operatoren warten nicht, `/townhall return <spieler>` bleibt sofort. Einstellbar mit `return.returnFreezeSeconds` (Standard 3, 0 = aus).
+- Mit Schlüssel abgeschlossene Türen (beide Hälften) können nirgends mehr abbrennen, auch außerhalb von Grundstücken. Explosionen ließen sie schon stehen.
+
 ## 1.17.3 – Schlüssel löschen
 
 - Neu `/key delete`: entfernt das Schloss der Tür, die man anschaut, wenn man den passenden Schlüssel in der Haupthand hält (Generalschlüssel: jedes Schloss). Vorher kommt eine Rückfrage mit klickbarem [Bestätigen], gültig 30 Sekunden und nur für dieselbe Tür.

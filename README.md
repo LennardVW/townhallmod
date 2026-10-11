@@ -412,6 +412,7 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 | Einstellung | Standard | Bedeutung |
 |---|---|---|
 | `return.clearAfterSuccessfulReturn` | `true` | Gespeicherte Stelle nach der Rückkehr löschen |
+| `return.returnFreezeSeconds` | `3` | Sekunden, die Spieler vor `/townhall return` eingefroren warten (Ops nicht); `0` = sofort |
 | `safeTeleport.enabled` | `true` | Vor der Rückkehr prüfen, ob die Stelle sicher ist |
 | `safeTeleport.horizontalRadius` / `verticalRadius` | `5` / `5` | Suchradius für einen sicheren Platz (höchstens 16) |
 | `fallback.useWorldSpawn` | `true` | Notfallziel ist der Welt-Spawn |

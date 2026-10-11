@@ -27,6 +27,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import dev.townhall.key.DoorLocks;
+import dev.townhall.key.Keys;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -56,6 +60,7 @@ public class TownhallGameTests {
 		// The test server has no multiworld mod, so the Nether plays the Townhall world (and the prison in it).
 		TownhallMod.CONFIG.get().locations.values().forEach(l -> l.dimension = "minecraft:the_nether");
 		TownhallMod.CONFIG.get().commands.cooldownSeconds = 0;
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0; // only the freeze tests turn it on
 		return player;
 	}
 
@@ -126,6 +131,87 @@ public class TownhallGameTests {
 		h.assertTrue(ReturnPositionStorage.get(h.getLevel().getServer()).get(p.getUUID()).orElseThrow().yaw() == 10f, "stored spot not overwritten");
 		run(p, "townhall return");
 		assertAt(h, p, home, start, 10f, 5f);
+		h.succeed();
+	}
+
+	@GameTest(maxTicks = 100)
+	public void returnFreezesThenTeleports(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
+		Level home = p.level();
+		Vec3 start = p.position();
+		run(p, "townhall");
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 1;
+		run(p, "townhall return");
+		h.assertTrue(inTownhall(p), "still in Townhall during countdown");
+		Capture again = capture(p.createCommandSourceStack(), "townhall return");
+		h.assertTrue(again.messages.stream().anyMatch(m -> m.contains("schon zurück")), "second call refused");
+		Vec3 spot = p.position();
+		p.absSnapTo(spot.x + 5, spot.y, spot.z, 0f, 0f);
+		h.runAfterDelay(5, () -> h.assertTrue(p.position().distanceTo(spot) < 0.2, "movement reset during countdown"));
+		h.runAfterDelay(30, () -> {
+			TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0;
+			assertAt(h, p, home, start, 0f, 0f);
+			h.succeed();
+		});
+	}
+
+	@GameTest
+	public void returnFreezeSkippedForOpsAndWhenOff(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		Level home = p.level();
+		Vec3 start = p.position();
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 3;
+		try {
+			opAt(p, "townhall send @s");
+			opAt(p, "townhall return");
+			assertAt(h, p, home, start, 0f, 0f);
+			TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0;
+			run(p, "townhall");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 0f, 0f);
+		} finally { TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0; }
+		h.succeed();
+	}
+
+	@GameTest
+	public void lockedDoorSurvivesFireAndExplosion(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
+		var level = (net.minecraft.server.level.ServerLevel) p.level();
+		BlockPos locked = h.absolutePos(new BlockPos(1, 1, 5));
+		BlockPos open = h.absolutePos(new BlockPos(5, 1, 5));
+		for (BlockPos at : new BlockPos[] {locked, open}) {
+			level.setBlockAndUpdate(at, Blocks.OAK_DOOR.defaultBlockState());
+			level.setBlockAndUpdate(at.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		}
+		var key = Keys.newKey("FireTest"); var keyId = Keys.keyId(key).orElseThrow();
+		var locks = DoorLocks.get(level.getServer());
+		locks.put(level.dimension(), locked, new DoorLocks.Lock(keyId.toString(), "FireTest", java.util.UUID.randomUUID().toString(), "Owner"));
+		// Vanilla doors are not flammable; make them so (as a flammable-block mod would) to prove the lock protects them.
+		var flammable = net.fabricmc.fabric.api.registry.FlammableBlockRegistry.getDefaultInstance();
+		flammable.add(Blocks.OAK_DOOR, 5, 20);
+		try {
+			java.lang.reflect.Method burn = net.minecraft.world.level.block.FireBlock.class.getDeclaredMethod("checkBurnOut",
+					Level.class, BlockPos.class, int.class, net.minecraft.util.RandomSource.class, int.class);
+			burn.setAccessible(true);
+			var fire = (net.minecraft.world.level.block.FireBlock) Blocks.FIRE;
+			for (int i = 0; i < 20; i++) {
+				burn.invoke(fire, level, locked, 1, level.getRandom(), 0);
+				burn.invoke(fire, level, locked.above(), 1, level.getRandom(), 0);
+			}
+			h.assertTrue(level.getBlockState(locked).is(Blocks.OAK_DOOR) && level.getBlockState(locked.above()).is(Blocks.OAK_DOOR), "locked door does not burn");
+			burn.invoke(fire, level, open, 1, level.getRandom(), 0);
+			h.assertTrue(!level.getBlockState(open).is(Blocks.OAK_DOOR), "unlocked door burns (control)");
+			level.setBlockAndUpdate(open, Blocks.OAK_DOOR.defaultBlockState());
+			level.setBlockAndUpdate(open.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+			Vec3 mid = Vec3.atCenterOf(locked.east(2));
+			level.explode(null, mid.x, mid.y, mid.z, 6f, Level.ExplosionInteraction.TNT);
+			h.assertTrue(level.getBlockState(locked).is(Blocks.OAK_DOOR) && level.getBlockState(locked.above()).is(Blocks.OAK_DOOR), "locked door survives explosion");
+			Vec3 mid2 = Vec3.atCenterOf(open.west(1));
+			level.explode(null, mid2.x, mid2.y, mid2.z, 6f, Level.ExplosionInteraction.TNT);
+			h.assertTrue(!level.getBlockState(open).is(Blocks.OAK_DOOR), "unlocked door destroyed by explosion (control)");
+		} catch (ReflectiveOperationException e) {
+			throw new AssertionError(e);
+		} finally { flammable.remove(Blocks.OAK_DOOR); locks.remove(level.dimension(), locked); }
 		h.succeed();
 	}
 

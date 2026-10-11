@@ -109,6 +109,8 @@ public class TownhallMod implements ModInitializer {
 		dev.townhall.city.PlotEnterTracker.register();
 		// Once per second: confinement and timers, and players who haven't accepted the rules yet.
 		ServerTickEvents.END_SERVER_TICK.register(ConfinementService::onServerTick);
+		ServerTickEvents.END_SERVER_TICK.register(dev.townhall.teleport.ReturnFreeze::onServerTick);
+		ServerLifecycleEvents.SERVER_STOPPING.register(s -> dev.townhall.teleport.ReturnFreeze.clear());
 		LOGGER.info("Townhall initialized with locations {}", CONFIG.get().locations.keySet());
 	}
 
