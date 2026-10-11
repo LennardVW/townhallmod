@@ -192,13 +192,26 @@ public final class TownhallCommand {
 		TownhallConfig.Location location = location(id);
 		boolean operator = isOperatorSelf(ctx.getSource());
 		if (location.adminOnly && !operator) return fail(ctx.getSource(), "Nur Operatoren dürfen dorthin.");
+		if (ReturnFreeze.isWaiting(player)) return fail(ctx.getSource(), "Du wirst schon teleportiert.");
 		if (onCooldown(ctx.getSource(), player)) return 0;
+		int freeze = config.returnSettings.returnFreezeSeconds;
+		if (freeze <= 0) return performEnter(ctx.getSource(), player, id, operator);
+		boolean confined = ReturnPositionStorage.get(player.level().getServer()).state(player.getUUID()).confined() && !operator;
+		if (!confined && TeleportService.isAlreadyThere(player, id, config))
+			return fail(ctx.getSource(), location.alreadyHereMessage.formatted(location.command));
+		ReturnFreeze.start(player, freeze, p -> performEnter(p.createCommandSourceStack(), p, id, operator));
+		return 1;
+	}
+
+	private static int performEnter(CommandSourceStack source, ServerPlayer player, String id, boolean operator) {
+		TownhallConfig config = TownhallMod.CONFIG.get();
+		TownhallConfig.Location location = location(id);
 		return switch (TeleportService.sendTo(player, id, config, operator, false, Optional.empty())) {
-			case SENT -> ok(ctx.getSource(), location.arrivedMessage);
-			case ALREADY_THERE -> fail(ctx.getSource(), location.alreadyHereMessage.formatted(location.command));
-			case UNAVAILABLE -> fail(ctx.getSource(), config.messages.locationUnavailable.formatted(location.dimension));
-			case CONFINED -> fail(ctx.getSource(), confinedMessage(config, player));
-			case FAILED -> fail(ctx.getSource(), "Teleport fehlgeschlagen. Sag bitte einem Operator Bescheid.");
+			case SENT -> ok(source, location.arrivedMessage);
+			case ALREADY_THERE -> fail(source, location.alreadyHereMessage.formatted(location.command));
+			case UNAVAILABLE -> fail(source, config.messages.locationUnavailable.formatted(location.dimension));
+			case CONFINED -> fail(source, confinedMessage(config, player));
+			case FAILED -> fail(source, "Teleport fehlgeschlagen. Sag bitte einem Operator Bescheid.");
 		};
 	}
 
@@ -208,12 +221,12 @@ public final class TownhallCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		boolean operator = isOperatorSelf(ctx.getSource());
 		int freeze = config.returnSettings.returnFreezeSeconds;
-		if (operator || freeze <= 0) return performReturn(ctx.getSource(), player, config, operator);
+		if (freeze <= 0) return performReturn(ctx.getSource(), player, config, operator);
 		if (ReturnFreeze.isWaiting(player)) return fail(ctx.getSource(), "Du kehrst schon zurück.");
 		ReturnPositionStorage storage = ReturnPositionStorage.get(player.level().getServer());
 		if (storage.state(player.getUUID()).confined()) return fail(ctx.getSource(), confinedMessage(config, player));
 		if (storage.state(player.getUUID()).returnPosition().isEmpty() && !isStuck(player, config)) return fail(ctx.getSource(), config.messages.noReturnPosition);
-		ReturnFreeze.start(player, freeze, p -> performReturn(p.createCommandSourceStack(), p, TownhallMod.CONFIG.get(), false));
+		ReturnFreeze.start(player, freeze, p -> performReturn(p.createCommandSourceStack(), p, TownhallMod.CONFIG.get(), operator));
 		return 1;
 	}
 

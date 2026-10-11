@@ -415,9 +415,9 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 | Einstellung | Standard | Bedeutung |
 |---|---|---|
 | `return.clearAfterSuccessfulReturn` | `true` | Gespeicherte Stelle nach der Rückkehr löschen |
-| `return.returnFreezeSeconds` | `3` | Sekunden, die Spieler vor `/townhall return` eingefroren warten (Ops nicht); `0` = sofort |
+| `return.returnFreezeSeconds` | `3` | Sekunden, die Spieler vor `/townhall return` eingefroren warten, beim Betreten und bei der Rückkehr, auch Ops; `0` = sofort |
 | `homes.maxHomes` | `1` | Zuhause pro Spieler (1 bis 100). Am Limit lässt sich nur eins mit gleichem Namen überschreiben. |
-| `teleport.warmupSeconds` | `3` | Sekunden Stillstehen (Countdown-Titel und Partikel) vor `/home` und angenommenem `/tpa`; Bewegung oder Schaden brechen ab; Ops warten nicht; `0` = aus |
+| `teleport.warmupSeconds` | `3` | Sekunden Stillstehen (Countdown-Titel und Partikel) vor `/home` und angenommenem `/tpa`; Bewegung oder Schaden brechen ab; gilt auch für Ops; `0` = aus |
 | `teleport.cooldownSeconds` | `30` | Pause zwischen zwei `/home`- oder `/tpa`-Teleports (Ops nicht); `0` = aus |
 | `safeTeleport.enabled` | `true` | Vor der Rückkehr prüfen, ob die Stelle sicher ist |
 | `safeTeleport.horizontalRadius` / `verticalRadius` | `5` / `5` | Suchradius für einen sicheren Platz (höchstens 16) |

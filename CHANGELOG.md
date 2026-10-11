@@ -8,6 +8,7 @@ Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbeh
 - Neu `/tpa <spieler>`, `/tpahere <spieler>`, `/tpaccept [spieler]`, `/tpdeny [spieler]`, `/tpacancel` und `/tpatoggle`. Eine Anfrage gilt 60 Sekunden, pro Anfragendem ist eine offen; das Ziel bekommt klickbare Knöpfe [Annehmen] und [Ablehnen].
 - Wartezeit vor `/home` und angenommenem `/tpa`: 3 Sekunden stillstehen (`teleport.warmupSeconds`, 0 = aus). Ein Countdown „3, 2, 1“ erscheint in der Bildschirmmitte, Partikel kreisen um den Spieler. Bewegung (mehr als 0,2 Blöcke), Schaden, Tod, Ausloggen oder Weltwechsel brechen ab. Kopfdrehen ist erlaubt. Das Ziel wird nach Ablauf nochmals geprüft.
 - Dieselbe Anzeige (Titel und Partikel) läuft jetzt auch bei `/townhall return`, dort bleibt das Einfrieren.
+- Der Countdown gilt für alle, auch für Admins, und auch beim Betreten von Orten (`/townhall`, `/<ort>`); nur die Pause entfällt für Operatoren.
 - Pause von 30 Sekunden zwischen zwei Teleports (`teleport.cooldownSeconds`). Operatoren warten weder noch haben sie eine Pause. Gefangene und Spieler, die die Regeln noch nicht akzeptiert haben, können nichts davon nutzen.
 
 ## 1.17.4 – Rückkehr mit Wartezeit, feuerfeste Schlösser

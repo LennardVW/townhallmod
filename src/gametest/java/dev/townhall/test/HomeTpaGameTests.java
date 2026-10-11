@@ -241,7 +241,7 @@ public class HomeTpaGameTests {
 	}
 
 	@GameTest
-	public void operatorsSkipWarmupAndCooldown(GameTestHelper h) {
+	public void operatorsGetWarmupButNoCooldown(GameTestHelper h) {
 		setup(h);
 		var server = h.getLevel().getServer();
 		TownhallMod.CONFIG.get().teleport.warmupSeconds = 3;
@@ -252,7 +252,8 @@ public class HomeTpaGameTests {
 			run(p, "sethome");
 			move(h, p, 6.5, 6.5);
 			run(p, "home");
-			near(h, p, 1.5, 1.5, "operator arrives at once");
+			h.assertTrue(Warmup.isWaiting(p), "operators see the countdown too");
+			Warmup.damaged(p);
 			TeleportRules.stamp(p);
 			h.assertTrue(TeleportRules.cooldownLeft(p) == 0, "no cooldown for operators");
 		} finally {
