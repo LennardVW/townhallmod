@@ -187,6 +187,35 @@ public class CityGameTests {
 		h.succeed();
 	}
 	@GameTest
+	public void plotCoOwnerAddByNameFromInsideOwnPlot(GameTestHelper h) {
+		var server=h.getLevel().getServer();var config=TownhallMod.CONFIG.get();boolean enabled=config.city.claimsEnabled;int per=config.city.claimChunksPerPlayer;
+		var plots=PlotStorage.get(server);BlockPos pos=h.absolutePos(new BlockPos(2,1,2));
+		config.city.claimsEnabled=true;config.city.claimChunksPerPlayer=1;
+		java.util.List<ServerPlayer> all=new java.util.ArrayList<>();
+		try {
+			int[][] chunks={{60,60},{-60,-60},{-61,70}};
+			for(var dimKey:List.of(net.minecraft.world.level.Level.OVERWORLD,net.minecraft.world.level.Level.NETHER)) for(boolean op:List.of(false,true)) for(int[] ch:chunks) {
+				ServerPlayer a=h.makeMockServerPlayerInLevel(),b=h.makeMockServerPlayerInLevel();all.add(a);all.add(b);
+				if(op) server.getPlayerList().op(a.nameAndId());
+				var level=server.getLevel(dimKey);
+				String nb=sel(b);String ctx=dimKey.identifier()+" op="+op+" chunk="+ch[0]+","+ch[1];
+				snapChunk(a,ch[0],ch[1],pos);
+				var src=a.createCommandSourceStack().withLevel(level);
+				server.getCommands().performPrefixedCommand(src,"plot claim");
+				var mine=plots.ownedBy(a.getUUID());
+				h.assertTrue(mine.isPresent(),"claim worked: "+ctx);
+				var src2=a.createCommandSourceStack().withLevel(level).withPosition(a.position());
+				int r=server.getCommands().getDispatcher().execute("plot coowner add "+nb,src2);
+				h.assertTrue(r==1,"coowner add by name from inside plot returns success: "+ctx+" result="+r);
+				int acc=server.getCommands().getDispatcher().execute("plot accept",b.createCommandSourceStack());
+				h.assertTrue(acc==1 && plots.plots().get(mine.get().getKey()).coOwners().contains(b.getUUID().toString()),"invite created and accepted: "+ctx);
+				plots.remove(mine.get().getKey());
+			}
+		} catch(com.mojang.brigadier.exceptions.CommandSyntaxException e) { throw new AssertionError(e.getMessage()); }
+		finally { config.city.claimsEnabled=enabled;config.city.claimChunksPerPlayer=per;for(var e:List.copyOf(plots.plots().entrySet())) for(var pl:all) if(e.getValue().isOwner(pl.getUUID())) plots.remove(e.getKey()); }
+		h.succeed();
+	}
+	@GameTest
 	public void plotHelpHidesAdminCommands(GameTestHelper h) {
 		ServerPlayer p=h.makeMockServerPlayerInLevel();
 		h.assertTrue(command(p.createCommandSourceStack(),"plot help")==1 && command(p.createCommandSourceStack(),"plot hilfe")==1,"help runs for non-op");

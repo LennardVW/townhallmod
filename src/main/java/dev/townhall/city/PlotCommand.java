@@ -134,7 +134,11 @@ public final class PlotCommand {
 		if(id!=null) return Optional.ofNullable(storage.plots().get(id)).map(p -> Map.entry(id,p));
 		var here = storage.at(s.getLevel().dimension().identifier().toString(),BlockPos.containing(s.getPosition()));
 		// nicht auf einem Grundstück: das eigene nehmen (Eigentümer/Miteigentümer), damit /plot coowner add Anna auch daneben klappt
-		return here.isPresent() || s.getPlayer()==null ? here : storage.ownedBy(s.getPlayer().getUUID());
+		if(here.isPresent() || s.getPlayer()==null) return here;
+		// Quelle kann von der Spielerposition abweichen (Multiworld-Mods): dann die echte Position des Spielers prüfen
+		ServerPlayer player = s.getPlayer();
+		here = storage.at(player.level().dimension().identifier().toString(),player.blockPosition());
+		return here.isPresent() ? here : storage.ownedBy(player.getUUID());
 	}
 	private static int update(CommandContext<CommandSourceStack> c,Level level,java.util.function.UnaryOperator<Plot> change,String detail) {
 		var s = c.getSource(); var entry = resolve(s,optionalId(c));
