@@ -120,6 +120,9 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 |---|---|
 | `/townhall` | Du gehst ins Rathaus. Deine aktuelle Stelle wird gespeichert. |
 | `/townhall return` | Du kommst an die gespeicherte Stelle zurück. |
+| `/sethome [name]`, `/home [name]`, `/delhome [name]`, `/homes` | Zuhause setzen, hinfliegen, löschen, auflisten (Standardname `home`, Anzahl über `homes.maxHomes`). Vor dem Teleport musst du 3 Sekunden stillstehen. |
+| `/tpa <spieler>`, `/tpahere <spieler>` | Teleportanfrage senden (60 Sekunden gültig, eine offene pro Spieler). Das Ziel klickt auf [Annehmen] oder [Ablehnen]. |
+| `/tpaccept [spieler]`, `/tpdeny [spieler]`, `/tpacancel`, `/tpatoggle` | Anfrage annehmen, ablehnen, zurückziehen; Anfragen sperren oder wieder erlauben |
 | `/rules` oder `/regeln` | Serverregeln anzeigen |
 | `/afk` | Dich selbst sofort als AFK melden |
 | `/playtime` | Deine Spielzeit |
@@ -128,6 +131,8 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 | `/key new <name>` | Neuen Türschlüssel mit Namen erzeugen |
 | `/key copy [spieler]` | Den Schlüssel in deiner Hand kopieren, auf Wunsch direkt für einen anderen Spieler |
 | `/key info` | Zeigt, mit welchem Schlüssel die Tür vor dir abgeschlossen ist |
+| `/key delete` | Entfernt das Schloss der Tür, die du anschaust (passender Schlüssel in der Hand). Danach auf [Bestätigen] klicken oder `/key delete confirm` (30 Sekunden, nur für diese Tür) |
+| `/key delete all` | Macht den Schlüssel in deiner Hand für immer ungültig: das Item verschwindet, alle Kopien öffnen nichts mehr, alle Schlösser mit ihm werden frei. Bestätigung mit `/key delete all confirm` (30 Sekunden) |
 
 ### Rathaus: so funktioniert die Rückkehr
 
@@ -143,6 +148,7 @@ Bis du akzeptiert hast, kannst du dich nicht bewegen, nicht chatten und nichts a
 2. Rechtsklick mit dem Schlüssel auf eine Tür schließt sie ab.
 3. Schleichen und Rechtsklick mit demselben Schlüssel schließt sie wieder auf.
 4. `/key copy Max` gibt Max eine Kopie. Die Kopie öffnet dieselben Türen.
+5. `/key delete` entfernt das Schloss an der Tür vor dir (Schlüssel in der Haupthand, Bestätigung nötig). `/key delete all` widerruft den Schlüssel samt Kopien und Schlössern; widerrufene Schlüssel schließen nie wieder etwas ab, neue Schlüssel bekommen immer eine neue ID. Den Generalschlüssel kann man nicht widerrufen.
 
 Es reicht, wenn der Schlüssel irgendwo im Inventar liegt. Du musst ihn nicht in der Hand halten. Ohne passenden Schlüssel lässt sich die Tür weder öffnen noch abbauen, und auch Knöpfe, Hebel, Redstone und Dorfbewohner öffnen sie nicht. Das funktioniert mit Holz-, Kupfer- und Eisentüren.
 
@@ -365,6 +371,7 @@ Oben in der Tab-Liste steht **AzubiCraft** mit einer Begrüßung, unten stehen O
 | `/tablist header &6&lAzubiCraft\|&7Hallo {player}!` | Kopfzeile setzen. `\|` beginnt eine neue Zeile, `-` bedeutet leer. |
 | `/tablist footer &7Online: {online}/{max}` | Fußzeile setzen |
 | `/tablist off` | Kopf- und Fußzeile ausschalten (`on` schaltet sie wieder ein). Danach sendet die Mod nichts mehr, Tab-Listen anderer Mods bleiben stehen. |
+| `/townhall end on\|off` | Endportale öffnen oder sperren (Standard: gesperrt). Ohne Wert zeigt der Befehl den Stand. Wer im End ist, bleibt; der Rückweg geht immer. |
 | `/townhall deathsintab off` | Todeszahl ausblenden (`on` zeigt sie wieder) |
 
 Platzhalter für Kopf- und Fußzeile: `{player}`, `{online}`, `{max}`, `{ping}`, `{playtime}`, `{world}`.
@@ -408,6 +415,10 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 | Einstellung | Standard | Bedeutung |
 |---|---|---|
 | `return.clearAfterSuccessfulReturn` | `true` | Gespeicherte Stelle nach der Rückkehr löschen |
+| `return.returnFreezeSeconds` | `3` | Sekunden, die Spieler vor `/townhall return` eingefroren warten (Ops nicht); `0` = sofort |
+| `homes.maxHomes` | `1` | Zuhause pro Spieler (1 bis 100). Am Limit lässt sich nur eins mit gleichem Namen überschreiben. |
+| `teleport.warmupSeconds` | `3` | Sekunden Stillstehen (Countdown-Titel und Partikel) vor `/home` und angenommenem `/tpa`; Bewegung oder Schaden brechen ab; Ops warten nicht; `0` = aus |
+| `teleport.cooldownSeconds` | `30` | Pause zwischen zwei `/home`- oder `/tpa`-Teleports (Ops nicht); `0` = aus |
 | `safeTeleport.enabled` | `true` | Vor der Rückkehr prüfen, ob die Stelle sicher ist |
 | `safeTeleport.horizontalRadius` / `verticalRadius` | `5` / `5` | Suchradius für einen sicheren Platz (höchstens 16) |
 | `fallback.useWorldSpawn` | `true` | Notfallziel ist der Welt-Spawn |
@@ -418,6 +429,7 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 | `confinement.allowedCommands` | `msg`, `tell`, `w`, `r`, `me`, `teammsg`, `tm`, `list`, `help`, `trigger` | Befehle, die Gefangene benutzen dürfen |
 | `dimensions` | leer | Regeln pro Welt, siehe oben |
 | `deathsInTab` | `true` | Rote Todeszahl in der Tab-Liste |
+| `endEnabled` | `false` | `false` sperrt Endportale (Betreten des Endes), `/townhall end on` öffnet sie |
 | `afkMinutes` | `5` | Minuten bis AFK, `0` nur manuell |
 | `joinMessages.*` | AzubiCraft-Texte | Join-, Leave- und Erstjoin-Nachrichten, eigene Nachrichten pro Spieler |
 | `tabList.*` | AzubiCraft-Kopf- und Fußzeile | Zeilen mit Platzhaltern |
@@ -455,6 +467,7 @@ Beispiel für Weltregeln in der Datei:
 |---|---|
 | `config/townhall.json` | Alle Einstellungen, Orte, Weltregeln, Bauer, Texte |
 | `<welt>/data/townhall/players.dat` | Gespeicherte Stellen, Gefangene, Restzeiten |
+| `<welt>/data/townhall/homes.dat` | Zuhause der Spieler |
 | `<welt>/data/townhall/onboarding.dat` | Welche Regelversion jeder Spieler akzeptiert hat |
 | `<welt>/data/townhall/nicknames.dat` | Nicknamen |
 | `<welt>/data/townhall/playtime.dat` | Spielzeiten |
@@ -491,7 +504,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 
 ## Alle Befehle auf einen Blick
 
-**Alle Spieler:** `/townhall`, `/townhall return`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`
+**Alle Spieler:** `/townhall`, `/townhall return`, `/sethome`, `/home`, `/delhome`, `/homes`, `/tpa`, `/tpahere`, `/tpaccept`, `/tpdeny`, `/tpacancel`, `/tpatoggle`, `/rules`, `/regeln`, `/rules accept`, `/afk`, `/playtime [spieler|top]`, `/key new <name>`, `/key copy [spieler]`, `/key info`, `/key delete`, `/key delete all`
 
 **Stadtfunktionen:** Alle Befehle für Rollen, Polizei, Wahlen, Läden, Grundstücke und Protokoll stehen in [docs/STADT.md](docs/STADT.md).
 
@@ -507,7 +520,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 | Bauer | `/builder add <welt> <spieler>`, `/builder remove <welt> <spieler>`, `/builder list [welt]` |
 | Schlüssel | `/key admin`, `/key unlock` |
 | Nicknamen | `/nick set <spieler> <nick>`, `/nick reset <spieler>`, `/nick list` |
-| Anzeige | `/joinmessage ...`, `/tablist ...`, `/townhall deathsintab on\|off`, `/townhall afktime <minuten>` |
+| Anzeige | `/joinmessage ...`, `/tablist ...`, `/townhall deathsintab on\|off`, `/townhall end on\|off`, `/townhall afktime <minuten>` |
 | Regeln | `/rules reset <spieler>` |
 
 ---

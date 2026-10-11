@@ -35,7 +35,10 @@ public final class PlotService {
 		Plot p = entry.get().getValue();
 		if (p.admits(player.getUUID(),RoleService.roles(player))) return true;
 		// Visitors may use doors/buttons/workstations when publicUse=true, but never open a storage container.
-		return p.publicUse() && !(level.getBlockEntity(pos) instanceof Container);
+		// Furnaces and brewing stands count as workstations, chests/barrels/hoppers/shulkers stay private.
+		var be = level.getBlockEntity(pos);
+		return p.publicUse() && (!(be instanceof Container) || be instanceof net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+				|| be instanceof net.minecraft.world.level.block.entity.BrewingStandBlockEntity);
 	}
 	public static boolean protects(ServerLevel level,BlockPos pos) { return at(level,pos).isPresent(); }
 	public static boolean pistonCrossesBoundary(ServerLevel level,BlockPos source,BlockPos destination) {

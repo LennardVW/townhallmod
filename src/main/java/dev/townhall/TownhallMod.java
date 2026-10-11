@@ -37,7 +37,10 @@ import dev.townhall.dimension.DimensionSettings;
 import dev.townhall.display.DeathsInTab;
 import dev.townhall.storage.ReturnPositionStorage;
 import dev.townhall.teleport.ConfinementService;
+import dev.townhall.command.HomeCommands;
+import dev.townhall.command.TpaCommands;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.entity.event.v1.ServerEntityLevelChangeEvents;
 import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
@@ -109,6 +112,11 @@ public class TownhallMod implements ModInitializer {
 		dev.townhall.city.PlotEnterTracker.register();
 		// Once per second: confinement and timers, and players who haven't accepted the rules yet.
 		ServerTickEvents.END_SERVER_TICK.register(ConfinementService::onServerTick);
+		ServerTickEvents.END_SERVER_TICK.register(dev.townhall.teleport.ReturnFreeze::onServerTick);
+		ServerLifecycleEvents.SERVER_STOPPING.register(s -> dev.townhall.teleport.ReturnFreeze.clear());
+		ServerLivingEntityEvents.AFTER_DAMAGE.register((entity, source, base, taken, blocked) -> {
+			if (taken > 0 && entity instanceof net.minecraft.server.level.ServerPlayer p) dev.townhall.teleport.Warmup.damaged(p);
+		});
 		LOGGER.info("Townhall initialized with locations {}", CONFIG.get().locations.keySet());
 	}
 
@@ -117,6 +125,8 @@ public class TownhallMod implements ModInitializer {
 		// Fixed commands own their names before configurable location roots are added. Otherwise Brigadier merges
 		// a location named "role", for example, into the administration command and keeps its location requirement.
 		RulesCommand.register(dispatcher);
+		HomeCommands.register(dispatcher);
+		TpaCommands.register(dispatcher);
 		LocationCommand.register(dispatcher);
 		BuilderCommand.register(dispatcher);
 		NickCommand.register(dispatcher);
@@ -160,6 +170,8 @@ public class TownhallMod implements ModInitializer {
 	 */
 	private static void onServerStopped(MinecraftServer server) {
 		TownhallCommand.reset();
+		TpaCommands.reset();
+		dev.townhall.teleport.TeleportRules.reset();
 		KeyCommand.reset();
 		Onboarding.reset();
 		Afk.reset();

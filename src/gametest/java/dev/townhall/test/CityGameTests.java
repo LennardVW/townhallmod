@@ -15,6 +15,29 @@ import java.util.*;
 
 public class CityGameTests {
 	@GameTest
+	public void englishDefaultsMigrateToGerman(GameTestHelper h) {
+		var config = new TownhallConfig();
+		config.messages.returned = "Returned to your previous location.";
+		config.messages.cooldown = "Please wait %d seconds before using this command again.";
+		config.messages.released = "Meine eigene Freilassung.";
+		var townhall = config.locations.get("townhall");
+		townhall.arrivedMessage = "Welcome to the Townhall.";
+		townhall.displayName = "the Townhall";
+		townhall.title = "&6Townhall";
+		townhall.alreadyHereMessage = "Eigener Text %s";
+		h.assertTrue(config.migrateEnglishDefaults(), "old English defaults are migrated");
+		h.assertTrue(config.messages.returned.equals(new TownhallConfig().messages.returned), "returned message migrated");
+		h.assertTrue(config.messages.cooldown.equals(new TownhallConfig().messages.cooldown), "cooldown message migrated");
+		h.assertTrue(config.messages.released.equals("Meine eigene Freilassung."), "edited message kept");
+		h.assertTrue(townhall.arrivedMessage.equals("Willkommen im Rathaus."), "arrival message migrated");
+		h.assertTrue(townhall.displayName.equals("das Rathaus"), "display name migrated");
+		h.assertTrue(townhall.title.equals("&6Rathaus"), "title migrated");
+		h.assertTrue(townhall.alreadyHereMessage.equals("Eigener Text %s"), "edited location text kept");
+		h.assertFalse(config.migrateEnglishDefaults(), "second run changes nothing");
+		h.succeed();
+	}
+
+	@GameTest
 	public void locationNamesCannotMergeIntoCityCommands(GameTestHelper h) {
 		var config = TownhallMod.CONFIG.get();
 		var original = new LinkedHashMap<>(config.locations);

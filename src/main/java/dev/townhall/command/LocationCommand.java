@@ -102,7 +102,7 @@ public final class LocationCommand {
 			String value = StringArgumentType.getString(ctx, "value");
 			if (setting.equals("alreadyHereMessage")) {
 				String problem = TownhallConfig.formatProblem(value, "townhall");
-				if (problem != null) return fail(ctx.getSource(), "alreadyHereMessage: " + problem + ". %s is replaced by the command name.");
+				if (problem != null) return fail(ctx.getSource(), "alreadyHereMessage: " + problem + ". %s wird durch den Befehlsnamen ersetzt.");
 			}
 			return change(ctx, setting, setter, value.equals("-") ? "" : value);
 		})));
@@ -115,7 +115,7 @@ public final class LocationCommand {
 		// The change is live even if saving failed, so free the prisoners whenever the location exists.
 		if (!value || !TownhallMod.CONFIG.get().locations.containsKey(id(ctx))) return result;
 		int released = ReturnPositionStorage.get(ctx.getSource().getServer()).releaseConfinedAt(id(ctx));
-		if (released > 0) okAdmin(ctx.getSource(), released + " confined player(s) there may leave now (return).");
+		if (released > 0) okAdmin(ctx.getSource(), released + " eingesperrte Spieler dürfen dort jetzt raus (Rückkehr).");
 		return result;
 	}
 
@@ -127,8 +127,8 @@ public final class LocationCommand {
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		boolean shared = dimension.equals(Level.OVERWORLD) || dimension.equals(config.fallbackDimension())
 				|| (config.fallback.useWorldSpawn && dimension.equals(server.getRespawnData().dimension()));
-		return shared ? dimension.identifier() + " is the overworld/fallback world that everyone shares. A location there would break /<cmd> and return"
-				+ " for everyone in it; use a world of its own." : null;
+		return shared ? dimension.identifier() + " ist die Oberwelt bzw. Ausweichwelt, die alle gemeinsam nutzen. Ein Ort dort würde /<befehl> und die Rückkehr"
+				+ " für alle darin kaputtmachen. Nimm eine eigene Welt." : null;
 	}
 
 	private static <T> int change(CommandContext<CommandSourceStack> ctx, String setting, BiConsumer<TownhallConfig.Location, T> setter, T value) {
@@ -138,7 +138,7 @@ public final class LocationCommand {
 		setter.accept(location, value);
 		TownhallMod.LOGGER.info("{} set {} of location {} to {}", ctx.getSource().getTextName(), setting, id, value);
 		if (!saveAndRefresh(ctx)) return 0;
-		return okAdmin(ctx.getSource(), setting + " of " + id + " is now " + (value instanceof String s && s.isEmpty() ? "empty" : value) + ".");
+		return okAdmin(ctx.getSource(), setting + " von " + id + " ist jetzt " + (value instanceof String s && s.isEmpty() ? "leer" : value) + ".");
 	}
 
 	private static int setCommandName(CommandContext<CommandSourceStack> ctx) {
@@ -153,13 +153,13 @@ public final class LocationCommand {
 		location.command = name;
 		TownhallMod.LOGGER.info("{} renamed the command of location {} from /{} to /{}", ctx.getSource().getTextName(), id, old, name);
 		if (!saveAndRefresh(ctx)) return 0;
-		return okAdmin(ctx.getSource(), id + " now uses /" + name + " (/" + old + " is gone).");
+		return okAdmin(ctx.getSource(), id + " nutzt jetzt /" + name + " (/" + old + " gibt es nicht mehr).");
 	}
 
 	private static String commandProblem(CommandContext<CommandSourceStack> ctx, String name, String exceptId) {
-		if (!TownhallConfig.isValidCommandName(name)) return "Command names may only use letters, digits and _ . : -";
-		if (TownhallMod.CONFIG.get().commandTaken(name, exceptId)) return "/" + name + " is already used by another location.";
-		if (TownhallCommand.isForeignCommand(ctx.getSource().getServer(), name)) return "/" + name + " is already a command of Minecraft or another mod.";
+		if (!TownhallConfig.isValidCommandName(name)) return "Befehlsnamen dürfen nur Buchstaben, Ziffern und _ . : - enthalten.";
+		if (TownhallMod.CONFIG.get().commandTaken(name, exceptId)) return "/" + name + " wird schon von einem anderen Ort genutzt.";
+		if (TownhallCommand.isForeignCommand(ctx.getSource().getServer(), name)) return "/" + name + " ist schon ein Befehl von Minecraft oder einer anderen Mod.";
 		return null;
 	}
 
@@ -167,10 +167,10 @@ public final class LocationCommand {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
 		String id = id(ctx).toLowerCase(Locale.ROOT);
 		TownhallConfig config = TownhallMod.CONFIG.get();
-		if (!ID.matcher(id).matches()) return fail(ctx.getSource(), "Ids may only use a-z, 0-9, _ and -.");
-		if (config.locations.containsKey(id)) return fail(ctx.getSource(), "Location " + id + " already exists.");
+		if (!ID.matcher(id).matches()) return fail(ctx.getSource(), "Kennungen dürfen nur a-z, 0-9, _ und - enthalten.");
+		if (config.locations.containsKey(id)) return fail(ctx.getSource(), "Der Ort " + id + " existiert schon.");
 		String problem = commandProblem(ctx, id, null);
-		if (problem != null) return fail(ctx.getSource(), problem + " Pick another id, or rename its command later with /location set <id> command <name>.");
+		if (problem != null) return fail(ctx.getSource(), problem + " Nimm eine andere Kennung oder ändere den Befehl später mit /location set <id> command <name>.");
 		String shared = sharedWorldProblem(ctx.getSource().getServer(), player.level().dimension());
 		if (shared != null) return fail(ctx.getSource(), shared);
 
@@ -182,27 +182,27 @@ public final class LocationCommand {
 		location.adminOnly = prison;
 		location.escapable = !prison;
 		location.title = (prison ? "&c" : "&6") + id;
-		location.arrivedMessage = prison ? "You were sent to " + id + "." : "Welcome to " + id + "!";
-		location.alreadyHereMessage = "You are already here. Use /%s return to go back.";
+		location.arrivedMessage = prison ? "Du wurdest nach " + id + " geschickt." : "Willkommen in " + id + "!";
+		location.alreadyHereMessage = "Du bist schon hier. Mit /%s return kommst du zurück.";
 		config.locations.put(id, location);
 		TownhallMod.LOGGER.info("{} created location {} ({}) in {}", ctx.getSource().getTextName(), id, prison ? "prison" : "normal", location.dimension);
 		if (!saveAndRefresh(ctx)) return 0;
-		return okAdmin(ctx.getSource(), "Created /" + id + (prison ? " as a prison (admins only, no escape)" : "") + ". Spawn = your position.");
+		return okAdmin(ctx.getSource(), "/" + id + " erstellt" + (prison ? " als Gefängnis (nur Admins, kein Ausbruch)" : "") + ". Spawn = deine Position.");
 	}
 
 	private static int delete(CommandContext<CommandSourceStack> ctx) {
 		String id = id(ctx);
 		TownhallConfig config = TownhallMod.CONFIG.get();
 		if (!config.locations.containsKey(id)) return unknown(ctx, id);
-		if (config.locations.size() == 1) return fail(ctx.getSource(), "This is the last location; at least one must stay.");
+		if (config.locations.size() == 1) return fail(ctx.getSource(), "Das ist der letzte Ort, mindestens einer muss bleiben.");
 		ReturnPositionStorage storage = ReturnPositionStorage.get(ctx.getSource().getServer());
 		long inside = storage.activePlayers().stream()
 				.filter(uuid -> storage.state(uuid).location().map(id::equals).orElse(false)).count();
-		if (inside > 0) return fail(ctx.getSource(), inside + " player(s) are still held there. Release them first with /" + config.locations.get(id).command + " return <player>.");
+		if (inside > 0) return fail(ctx.getSource(), inside + " Spieler sind dort noch eingesperrt. Lass sie zuerst mit /" + config.locations.get(id).command + " return <player> frei.");
 		config.locations.remove(id);
 		TownhallMod.LOGGER.info("{} deleted location {}", ctx.getSource().getTextName(), id);
 		if (!saveAndRefresh(ctx)) return 0;
-		return okAdmin(ctx.getSource(), "Deleted " + id + ".");
+		return okAdmin(ctx.getSource(), "Ort " + id + " gelöscht.");
 	}
 
 	private static int setSpawn(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
@@ -216,14 +216,14 @@ public final class LocationCommand {
 		location.spawn = TownhallConfig.Spot.of(player);
 		TownhallMod.LOGGER.info("{} set the spawn of {} to {} in {}", ctx.getSource().getTextName(), id, spot(location.spawn), location.dimension);
 		if (!saveAndRefresh(ctx)) return 0;
-		return okAdmin(ctx.getSource(), "Spawn of " + id + " set to " + spot(location.spawn) + " in " + location.dimension + ".");
+		return okAdmin(ctx.getSource(), "Spawn von " + id + " auf " + spot(location.spawn) + " in " + location.dimension + " gesetzt.");
 	}
 
 	private static int list(CommandContext<CommandSourceStack> ctx) {
-		MutableComponent text = Component.literal("Locations:").withStyle(ChatFormatting.GOLD);
+		MutableComponent text = Component.literal("Orte:").withStyle(ChatFormatting.GOLD);
 		TownhallMod.CONFIG.get().locations.forEach((id, l) -> text.append(Component.literal("\n " + id).withStyle(ChatFormatting.WHITE))
 				.append(Component.literal("  /" + l.command + "  " + l.dimension
-						+ (l.adminOnly ? "  admins only" : "") + (l.isEscapable() ? "" : "  no escape")).withStyle(ChatFormatting.GRAY)));
+						+ (l.adminOnly ? "  nur Admins" : "") + (l.isEscapable() ? "" : "  kein Ausbruch")).withStyle(ChatFormatting.GRAY)));
 		ctx.getSource().sendSuccess(() -> text, false);
 		return 1;
 	}
@@ -232,11 +232,11 @@ public final class LocationCommand {
 		TownhallConfig.Location l = TownhallMod.CONFIG.get().locations.get(id);
 		if (l == null) return unknown(ctx, id);
 		ServerLevel level = ctx.getSource().getServer().getLevel(l.dimensionKey());
-		MutableComponent text = Component.literal("Location " + id).withStyle(ChatFormatting.GOLD);
+		MutableComponent text = Component.literal("Ort " + id).withStyle(ChatFormatting.GOLD);
 		for (List<String> row : List.of(
 				List.of("command", "/" + l.command),
 				List.of("name", l.displayName == null ? id : l.displayName),
-				List.of("dimension", l.dimension + (level == null ? " (NOT LOADED)" : "")),
+				List.of("dimension", l.dimension + (level == null ? " (NICHT GELADEN)" : "")),
 				List.of("spawn", spot(l.spawn)),
 				List.of("adminOnly", String.valueOf(l.adminOnly)),
 				List.of("escapable", String.valueOf(l.isEscapable())),
@@ -262,7 +262,7 @@ public final class LocationCommand {
 	}
 
 	private static int unknown(CommandContext<CommandSourceStack> ctx, String id) {
-		return fail(ctx.getSource(), "No location " + id + ". See /location list.");
+		return fail(ctx.getSource(), "Es gibt keinen Ort " + id + ". Siehe /location list.");
 	}
 
 }

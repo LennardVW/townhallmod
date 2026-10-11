@@ -45,14 +45,14 @@ public final class NickCommand {
 
 	private static int set(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		Collection<NameAndId> players = GameProfileArgument.getGameProfiles(ctx, "player");
-		if (players.size() != 1) return fail(ctx.getSource(), "Pick exactly one player.");
+		if (players.size() != 1) return fail(ctx.getSource(), "Wähle genau einen Spieler.");
 		NameAndId player = players.iterator().next();
 		String nick = StringArgumentType.getString(ctx, "nickname").strip();
 		String problem = problem(ctx.getSource().getServer(), player, nick);
 		if (problem != null) return fail(ctx.getSource(), problem);
 		Nicknames.get(ctx.getSource().getServer()).set(ctx.getSource().getServer(), player.id(), player.name(), nick);
 		TownhallMod.LOGGER.info("{} set the nickname of {} to {}", ctx.getSource().getTextName(), player.name(), nick);
-		return okAdmin(ctx.getSource(), Component.literal(player.name() + " is now shown as ").withStyle(ChatFormatting.GREEN)
+		return okAdmin(ctx.getSource(), Component.literal(player.name() + " wird jetzt angezeigt als ").withStyle(ChatFormatting.GREEN)
 				.append(Nicknames.of(player.id()).orElseThrow()));
 	}
 
@@ -64,15 +64,15 @@ public final class NickCommand {
 	 */
 	static String problem(MinecraftServer server, NameAndId owner, String nick) {
 		String plain = Nicknames.plain(nick);
-		if (plain.isEmpty()) return "The nickname is empty.";
-		if (plain.length() > MAX_LENGTH) return "Nicknames can have at most " + MAX_LENGTH + " characters.";
+		if (plain.isEmpty()) return "Der Spitzname ist leer.";
+		if (plain.length() > MAX_LENGTH) return "Spitznamen dürfen höchstens " + MAX_LENGTH + " Zeichen haben.";
 		for (Map.Entry<UUID, Nicknames.Entry> e : Nicknames.get(server).entries().entrySet()) {
 			if (!e.getKey().equals(owner.id()) && Nicknames.plain(e.getValue().nick()).equals(plain)) {
-				return "Another player already has that nickname.";
+				return "Ein anderer Spieler hat diesen Spitznamen schon.";
 			}
 		}
 		if (!Nicknames.plain(owner.name()).equals(plain) && Nicknames.isKnownRealName(server, plain)) {
-			return "That is the name of another player.";
+			return "Das ist der Name eines anderen Spielers.";
 		}
 		return null;
 	}
@@ -82,19 +82,19 @@ public final class NickCommand {
 		for (NameAndId player : GameProfileArgument.getGameProfiles(ctx, "player")) {
 			if (Nicknames.get(ctx.getSource().getServer()).reset(ctx.getSource().getServer(), player.id())) done++;
 		}
-		if (done == 0) return fail(ctx.getSource(), "No nickname set.");
+		if (done == 0) return fail(ctx.getSource(), "Kein Spitzname gesetzt.");
 		TownhallMod.LOGGER.info("{} reset {} nickname(s)", ctx.getSource().getTextName(), done);
-		okAdmin(ctx.getSource(), "Nickname removed, the real name is shown again.");
+		okAdmin(ctx.getSource(), "Spitzname entfernt, der echte Name wird wieder angezeigt.");
 		return done;
 	}
 
 	private static int list(CommandContext<CommandSourceStack> ctx) {
 		var entries = Nicknames.get(ctx.getSource().getServer()).entries();
 		if (entries.isEmpty()) {
-			ctx.getSource().sendSuccess(() -> Component.literal("No nicknames set.").withStyle(ChatFormatting.GOLD), false);
+			ctx.getSource().sendSuccess(() -> Component.literal("Keine Spitznamen gesetzt.").withStyle(ChatFormatting.GOLD), false);
 			return 0;
 		}
-		var text = Component.literal("Nicknames:").withStyle(ChatFormatting.GOLD);
+		var text = Component.literal("Spitznamen:").withStyle(ChatFormatting.GOLD);
 		entries.forEach((uuid, e) -> text.append(Component.literal("\n " + e.name() + " → ").withStyle(ChatFormatting.GRAY))
 				.append(Nicknames.of(uuid).orElse(Component.literal(e.nick()))));
 		ctx.getSource().sendSuccess(() -> text, false);

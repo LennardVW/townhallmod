@@ -118,8 +118,8 @@ public final class PlotCommand {
 	}
 	private static int info(CommandSourceStack s,String id) {
 		var storage = PlotStorage.get(s.getServer());
-		var entry = id==null ? storage.at(s.getLevel().dimension().identifier().toString(),BlockPos.containing(s.getPosition())) : Optional.ofNullable(storage.plots().get(id)).map(p -> Map.entry(id,p));
-		if(entry.isEmpty()) return Feedback.fail(s,"Hier ist kein Grundstück eingerichtet.");
+		var entry = resolve(s,id);
+		if(entry.isEmpty()) return Feedback.fail(s,id==null ? "Du stehst auf keinem Grundstück und besitzt keins." : "Unbekanntes Grundstück.");
 		Plot p = entry.get().getValue();
 		return Feedback.ok(s,entry.get().getKey() + ": " + p.dimension() + " (" + p.minX()+","+p.minZ()+") bis ("+p.maxX()+","+p.maxZ()+") | Eigentümer: " + p.owner().orElse("öffentliche Fläche") + " | Miteigentümer: " + p.coOwners() + " | Manager: " + p.managers() + " | Mitbauer: " + p.trusted() + " | Rollen: " + p.roles() + " | Chunks: " + p.chunkCount() + (p.owner().isPresent() ? " von " + storage.quota(p,TownhallMod.CONFIG.get().city.claimChunksPerPlayer) + " erlaubt" : "") + " | Besucherzugang: " + p.publicUse() + " | Schutz aktiv: " + TownhallMod.CONFIG.get().city.claimsEnabled);
 	}
@@ -138,6 +138,7 @@ public final class PlotCommand {
 		// Quelle kann von der Spielerposition abweichen (Multiworld-Mods): dann die echte Position des Spielers prüfen
 		ServerPlayer player = s.getPlayer();
 		here = storage.at(player.level().dimension().identifier().toString(),player.blockPosition());
+		if(here.isPresent()) TownhallMod.LOGGER.warn("Plot lookup: command source {} {} differs from player {} {}",s.getLevel().dimension().identifier(),BlockPos.containing(s.getPosition()),player.level().dimension().identifier(),player.blockPosition());
 		return here.isPresent() ? here : storage.ownedBy(player.getUUID());
 	}
 	private static int update(CommandContext<CommandSourceStack> c,Level level,java.util.function.UnaryOperator<Plot> change,String detail) {

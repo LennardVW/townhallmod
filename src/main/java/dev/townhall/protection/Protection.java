@@ -81,7 +81,7 @@ public final class Protection {
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 			if (Onboarding.isRestricted(sp)) return deniedOnboarding(sp);
-			if (!CivicSites.canUse(sp, (ServerLevel) level, hit.getBlockPos()) || !PlotService.canUse(sp, (ServerLevel) level, hit.getBlockPos())) return denied(sp);
+			if (!CivicSites.canUse(sp, (ServerLevel) level, hit.getBlockPos()) || !PlotService.canUse(sp, (ServerLevel) level, hit.getBlockPos())) return deniedUse(sp, level, hit.getBlockPos());
 			if (mayBuildAt(sp, (ServerLevel) level, hit.getBlockPos())) return InteractionResult.PASS;
 			BlockState target = level.getBlockState(hit.getBlockPos());
 			if (isProtectedBlock(target)) return denied(sp);
@@ -127,7 +127,7 @@ public final class Protection {
 		DimensionSettings.Rules rules = DimensionSettings.of(victim.level().dimension());
 		if (!rules.fallDamage() && source.is(DamageTypeTags.IS_FALL)) return false;
 		if (!rules.pvp() && source.getEntity() instanceof Player attacker && attacker != victim) {
-			if (attacker instanceof ServerPlayer sp) sp.sendOverlayMessage(Component.literal("PvP is off in this world.").withStyle(ChatFormatting.RED));
+			if (attacker instanceof ServerPlayer sp) sp.sendOverlayMessage(Component.literal("PvP ist in dieser Welt aus.").withStyle(ChatFormatting.RED));
 			return false;
 		}
 		return true;
@@ -191,7 +191,7 @@ public final class Protection {
 		player.removeTag(BUILDER_CREATIVE_TAG);
 		if (player.gameMode() == GameType.CREATIVE) {
 			player.setGameMode(GameType.SURVIVAL);
-			player.sendSystemMessage(Component.literal("Back to survival: creative only works where you are a builder.").withStyle(ChatFormatting.YELLOW));
+			player.sendSystemMessage(Component.literal("Zurück im Überlebensmodus: Kreativ geht nur dort, wo du Mitbauer bist.").withStyle(ChatFormatting.YELLOW));
 		}
 	}
 
@@ -243,8 +243,15 @@ public final class Protection {
 		return !(entity instanceof LivingEntity) || entity instanceof ArmorStand;
 	}
 
+	/** The client already toggled the door/trapdoor locally; vanilla only resends the clicked block, so resend both door halves too. */
+	private static InteractionResult deniedUse(ServerPlayer player, net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+		for (var p : new net.minecraft.core.BlockPos[] {pos, pos.above(), pos.below()})
+			player.connection.send(new net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket(level, p));
+		return denied(player);
+	}
+
 	private static InteractionResult denied(ServerPlayer player) {
-		player.sendOverlayMessage(Component.literal("You can't build here.").withStyle(ChatFormatting.RED));
+		player.sendOverlayMessage(Component.literal("Du kannst hier nicht bauen.").withStyle(ChatFormatting.RED));
 		return InteractionResult.FAIL;
 	}
 

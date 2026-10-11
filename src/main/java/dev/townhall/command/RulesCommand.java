@@ -36,14 +36,14 @@ public final class RulesCommand {
 
 	private static int accept(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer player = ctx.getSource().getPlayerOrException();
-		if (!Onboarding.accept(player)) ctx.getSource().sendFailure(Component.literal("You already accepted the rules."));
+		if (!Onboarding.accept(player)) ctx.getSource().sendFailure(Component.literal("Du hast die Regeln schon akzeptiert."));
 		return 1;
 	}
 
 	private static int reset(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 		ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
 		Onboarding.reset(target);
-		ctx.getSource().sendSuccess(() -> Component.literal(target.getPlainTextName() + " has to accept the rules again."), true);
+		ctx.getSource().sendSuccess(() -> Component.literal(target.getPlainTextName() + " muss die Regeln erneut akzeptieren."), true);
 		return 1;
 	}
 }

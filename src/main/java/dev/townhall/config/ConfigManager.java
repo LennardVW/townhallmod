@@ -23,8 +23,8 @@ import java.util.function.Function;
 public final class ConfigManager {
 
 	/** Told to the admin by every command whose change could not be written. */
-	public static final String NOT_SAVED = "Config not saved: fix config/townhall.json and run /townhall reload (see the server log)."
-			+ " The change is active until then, but a reload or restart undoes it.";
+	public static final String NOT_SAVED = "Konfiguration nicht gespeichert: Korrigiere config/townhall.json und führe /townhall reload aus (siehe Server-Log)."
+			+ " Die Änderung gilt bis dahin, aber ein Reload oder Neustart macht sie rückgängig.";
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -87,7 +87,7 @@ public final class ConfigManager {
 		try (Reader reader = Files.newBufferedReader(path)) {
 			parsed = GSON.fromJson(reader, TownhallConfig.class);
 		} catch (IOException | JsonParseException e) {
-			String error = "Could not read " + path.getFileName() + ": " + e.getMessage();
+			String error = "Konnte " + path.getFileName() + " nicht lesen: " + e.getMessage();
 			TownhallMod.LOGGER.error(error);
 			fileIsActive = false;
 			return List.of(error);
@@ -95,8 +95,9 @@ public final class ConfigManager {
 		if (parsed == null) {
 			TownhallMod.LOGGER.error("{} is empty", path);
 			fileIsActive = false;
-			return List.of(path.getFileName() + " is empty");
+			return List.of(path.getFileName() + " ist leer");
 		}
+		parsed.migrateEnglishDefaults();
 		List<String> errors = parsed.validate();
 		if (errors.isEmpty()) errors = check.apply(parsed);
 		if (!errors.isEmpty()) {

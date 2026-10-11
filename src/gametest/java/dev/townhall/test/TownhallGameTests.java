@@ -27,6 +27,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
+import dev.townhall.key.DoorLocks;
+import dev.townhall.key.Keys;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -56,6 +60,7 @@ public class TownhallGameTests {
 		// The test server has no multiworld mod, so the Nether plays the Townhall world (and the prison in it).
 		TownhallMod.CONFIG.get().locations.values().forEach(l -> l.dimension = "minecraft:the_nether");
 		TownhallMod.CONFIG.get().commands.cooldownSeconds = 0;
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0; // only the freeze tests turn it on
 		return player;
 	}
 
@@ -129,6 +134,87 @@ public class TownhallGameTests {
 		h.succeed();
 	}
 
+	@GameTest(maxTicks = 100)
+	public void returnFreezesThenTeleports(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
+		Level home = p.level();
+		Vec3 start = p.position();
+		run(p, "townhall");
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 1;
+		run(p, "townhall return");
+		h.assertTrue(inTownhall(p), "still in Townhall during countdown");
+		Capture again = capture(p.createCommandSourceStack(), "townhall return");
+		h.assertTrue(again.messages.stream().anyMatch(m -> m.contains("schon zurück")), "second call refused");
+		Vec3 spot = p.position();
+		p.absSnapTo(spot.x + 5, spot.y, spot.z, 0f, 0f);
+		h.runAfterDelay(5, () -> h.assertTrue(p.position().distanceTo(spot) < 0.2, "movement reset during countdown"));
+		h.runAfterDelay(30, () -> {
+			TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0;
+			assertAt(h, p, home, start, 0f, 0f);
+			h.succeed();
+		});
+	}
+
+	@GameTest
+	public void returnFreezeSkippedForOpsAndWhenOff(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
+		Level home = p.level();
+		Vec3 start = p.position();
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 3;
+		try {
+			opAt(p, "townhall send @s");
+			opAt(p, "townhall return");
+			assertAt(h, p, home, start, 0f, 0f);
+			TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0;
+			run(p, "townhall");
+			run(p, "townhall return");
+			assertAt(h, p, home, start, 0f, 0f);
+		} finally { TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0; }
+		h.succeed();
+	}
+
+	@GameTest
+	public void lockedDoorSurvivesFireAndExplosion(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
+		var level = (net.minecraft.server.level.ServerLevel) p.level();
+		BlockPos locked = h.absolutePos(new BlockPos(1, 1, 5));
+		BlockPos open = h.absolutePos(new BlockPos(5, 1, 5));
+		for (BlockPos at : new BlockPos[] {locked, open}) {
+			level.setBlockAndUpdate(at, Blocks.OAK_DOOR.defaultBlockState());
+			level.setBlockAndUpdate(at.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		}
+		var key = Keys.newKey("FireTest"); var keyId = Keys.keyId(key).orElseThrow();
+		var locks = DoorLocks.get(level.getServer());
+		locks.put(level.dimension(), locked, new DoorLocks.Lock(keyId.toString(), "FireTest", java.util.UUID.randomUUID().toString(), "Owner"));
+		// Vanilla doors are not flammable; make them so (as a flammable-block mod would) to prove the lock protects them.
+		var flammable = net.fabricmc.fabric.api.registry.FlammableBlockRegistry.getDefaultInstance();
+		flammable.add(Blocks.OAK_DOOR, 5, 20);
+		try {
+			java.lang.reflect.Method burn = net.minecraft.world.level.block.FireBlock.class.getDeclaredMethod("checkBurnOut",
+					Level.class, BlockPos.class, int.class, net.minecraft.util.RandomSource.class, int.class);
+			burn.setAccessible(true);
+			var fire = (net.minecraft.world.level.block.FireBlock) Blocks.FIRE;
+			for (int i = 0; i < 20; i++) {
+				burn.invoke(fire, level, locked, 1, level.getRandom(), 0);
+				burn.invoke(fire, level, locked.above(), 1, level.getRandom(), 0);
+			}
+			h.assertTrue(level.getBlockState(locked).is(Blocks.OAK_DOOR) && level.getBlockState(locked.above()).is(Blocks.OAK_DOOR), "locked door does not burn");
+			burn.invoke(fire, level, open, 1, level.getRandom(), 0);
+			h.assertTrue(!level.getBlockState(open).is(Blocks.OAK_DOOR), "unlocked door burns (control)");
+			level.setBlockAndUpdate(open, Blocks.OAK_DOOR.defaultBlockState());
+			level.setBlockAndUpdate(open.above(), Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+			Vec3 mid = Vec3.atCenterOf(locked.east(2));
+			level.explode(null, mid.x, mid.y, mid.z, 6f, Level.ExplosionInteraction.TNT);
+			h.assertTrue(level.getBlockState(locked).is(Blocks.OAK_DOOR) && level.getBlockState(locked.above()).is(Blocks.OAK_DOOR), "locked door survives explosion");
+			Vec3 mid2 = Vec3.atCenterOf(open.west(1));
+			level.explode(null, mid2.x, mid2.y, mid2.z, 6f, Level.ExplosionInteraction.TNT);
+			h.assertTrue(!level.getBlockState(open).is(Blocks.OAK_DOOR), "unlocked door destroyed by explosion (control)");
+		} catch (ReflectiveOperationException e) {
+			throw new AssertionError(e);
+		} finally { flammable.remove(Blocks.OAK_DOOR); locks.remove(level.dimension(), locked); }
+		h.succeed();
+	}
+
 	@GameTest
 	public void operatorSendAndReturn(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(4.2, 1, 1.7), -45f, 12f);
@@ -150,7 +236,7 @@ public class TownhallGameTests {
 		Capture self = capture(p.createCommandSourceStack(), "townhall return");
 		h.assertTrue(self.said(TownhallMod.CONFIG.get().messages.noReturnPosition), "player is told nothing is stored: " + self.messages);
 		Capture op = capture(opSource(p), "townhall return @s");
-		h.assertTrue(op.said("No return position stored for"), "operator is told nothing is stored: " + op.messages);
+		h.assertTrue(op.said("ist keine Rückkehrposition gespeichert"), "operator is told nothing is stored: " + op.messages);
 		h.assertTrue(p.level() == h.getLevel() && p.position().distanceTo(start) < EPS, "player not moved");
 		h.succeed();
 	}
@@ -270,17 +356,17 @@ public class TownhallGameTests {
 		run(p, "townhall setspawn");
 		h.assertTrue(townhall.spawn == before, "non-op can't set spawn");
 		Capture fromConsole = capture(server.createCommandSourceStack(), "townhall setspawn");
-		h.assertTrue(fromConsole.said("must be executed by a player"), "console is told to be a player: " + fromConsole.messages);
+		h.assertTrue(fromConsole.said("muss von einem Spieler ausgeführt werden"), "console is told to be a player: " + fromConsole.messages);
 		h.assertTrue(townhall.spawn == before, "console can't set spawn");
 		Capture outside = capture(opSource(p), "townhall setspawn");
-		h.assertTrue(outside.said("Stand in " + townhall.dimension), "operator outside the Townhall world is told where to stand: " + outside.messages);
+		h.assertTrue(outside.said("Stell dich in " + townhall.dimension), "operator outside the Townhall world is told where to stand: " + outside.messages);
 		h.assertTrue(townhall.spawn == before, "no spawn outside the Townhall world");
 
 		// Positive control: an operator standing in the Townhall world sets it (on the same spot, so parallel tests don't notice).
 		p.teleportTo(server.getLevel(townhall.dimensionKey()), before.x, before.y, before.z, java.util.Set.of(), before.yaw, before.pitch, true);
 		try {
 			Capture inside = capture(opSource(p), "townhall setspawn");
-			h.assertTrue(inside.said("Spawn of " + TownhallMod.CONFIG.get().displayName("townhall") + " set to"), "operator sets the spawn: " + inside.messages);
+			h.assertTrue(inside.said("Spawn gesetzt (" + TownhallMod.CONFIG.get().displayName("townhall") + ")"), "operator sets the spawn: " + inside.messages);
 			h.assertTrue(townhall.spawn != before && townhall.spawn.x == before.x && townhall.spawn.y == before.y && townhall.spawn.z == before.z,
 					"new spawn stored at the operator's position");
 		} finally {
@@ -298,9 +384,9 @@ public class TownhallGameTests {
 		storage.set(p.getUUID(), PlayerState.EMPTY.withReturnPosition(ReturnLocation.of(p)));
 		try {
 			Capture debug = capture(opSource(p), "townhall debug @p[distance=..0.5]");
-			h.assertTrue(debug.said("(as " + p.getPlainTextName() + ")"), "debug shows the name stored with the return position: " + debug.messages);
+			h.assertTrue(debug.said("(als " + p.getPlainTextName() + ")"), "debug shows the name stored with the return position: " + debug.messages);
 			Capture status = capture(server.createCommandSourceStack(), "townhall status");
-			h.assertTrue(status.said("Stored return positions"), "status lists the stored positions: " + status.messages);
+			h.assertTrue(status.said("Gespeicherte Rückkehrpositionen"), "status lists the stored positions: " + status.messages);
 			h.assertFalse(status.said("Persistent storage"), "no constant filler line: " + status.messages);
 		} finally {
 			storage.remove(p.getUUID());
@@ -367,7 +453,7 @@ public class TownhallGameTests {
 		// A sign runs with GAMEMASTER source rights but the player's own rights decide: the explicit check answers.
 		Capture sign = capture(new CommandSourceStack(CommandSource.NULL, p.position(), Vec2.ZERO, (ServerLevel) p.level(),
 				LevelBasedPermissionSet.GAMEMASTER, server, p), "gefaengnis");
-		h.assertTrue(sign.said("Only operators can go there"), "players are told why: " + sign.messages);
+		h.assertTrue(sign.said("Nur Operatoren dürfen dorthin"), "players are told why: " + sign.messages);
 		h.assertTrue(p.level() == h.getLevel() && p.position().distanceTo(start) < EPS, "player not moved");
 		h.assertTrue(ReturnPositionStorage.get(h.getLevel().getServer()).state(p.getUUID()).isEmpty(), "nothing stored");
 		h.succeed();
@@ -962,7 +1048,7 @@ public class TownhallGameTests {
 				keyTestDoor(h, lower, door);
 				h.assertTrue(useDoor(h, admin, lower.above()).consumesAction(), "admin links upper half of " + block);
 				var lock = dev.townhall.key.Keys.lockAt(h.getLevel(), h.absolutePos(lower)).orElseThrow();
-				h.assertTrue(lock.keyName().equals("Admin Key"), "admin lock has a readable name");
+				h.assertTrue(lock.keyName().equals("Admin-Schlüssel"), "admin lock has a readable name");
 				h.assertTrue(useDoor(h, stranger, lower) == net.minecraft.world.InteractionResult.FAIL, "no key cannot use admin-locked " + block);
 				h.assertTrue(useDoor(h, admin, lower) == net.minecraft.world.InteractionResult.PASS, "admin keeps access to " + block);
 				var encoded = dev.townhall.key.DoorLocks.CODEC.encodeStart(NbtOps.INSTANCE, dev.townhall.key.DoorLocks.get(server)).getOrThrow();
@@ -1014,6 +1100,89 @@ public class TownhallGameTests {
 			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
 			server.getPlayerList().deop(player.nameAndId());
 			TownhallMod.CONFIG.get().onboarding.enabled = onboarding;
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void keyDeleteNeedsMatchingKeyAndConfirm(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var player = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		BlockPos other = new BlockPos(3, 1, 1);
+		try {
+			keyTestDoor(h, lower, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			keyTestDoor(h, other, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			var key = dev.townhall.key.Keys.newKey("Haus");
+			lock(h.getLevel(), h.absolutePos(lower), key);
+			lock(h.getLevel(), h.absolutePos(other), key);
+			var abs = h.absolutePos(lower);
+			player.absSnapTo(abs.getX() + 0.5, abs.getY(), abs.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.newKey("Falsch"));
+			capture(player.createCommandSourceStack(), "key delete");
+			capture(player.createCommandSourceStack(), "key delete confirm");
+			h.assertTrue(locked(h.getLevel(), abs), "wrong key keeps the lock");
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.copy(key));
+			capture(player.createCommandSourceStack(), "key delete");
+			h.assertTrue(locked(h.getLevel(), abs), "no confirm, lock stays");
+			var o = h.absolutePos(other);
+			player.absSnapTo(o.getX() + 0.5, o.getY(), o.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			capture(player.createCommandSourceStack(), "key delete confirm");
+			h.assertTrue(locked(h.getLevel(), abs) && locked(h.getLevel(), o), "confirm at another door is refused");
+			player.absSnapTo(abs.getX() + 0.5, abs.getY(), abs.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			capture(player.createCommandSourceStack(), "key delete");
+			capture(player.createCommandSourceStack(), "key delete confirm");
+			h.assertFalse(locked(h.getLevel(), abs), "matching key removes the lock after confirm");
+			h.assertTrue(locked(h.getLevel(), o), "other door untouched");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(other));
+		}
+		h.succeed();
+	}
+
+	@GameTest
+	public void keyDeleteAllRevokesKey(GameTestHelper h) {
+		var server = h.getLevel().getServer();
+		var player = h.makeMockServerPlayerInLevel();
+		BlockPos lower = new BlockPos(1, 1, 1);
+		var id = java.util.Optional.<UUID>empty();
+		net.minecraft.world.item.ItemStack key0 = net.minecraft.world.item.ItemStack.EMPTY;
+		try {
+			keyTestDoor(h, lower, (net.minecraft.world.level.block.DoorBlock) Blocks.OAK_DOOR);
+			var key = dev.townhall.key.Keys.newKey("Haus");
+			id = dev.townhall.key.Keys.keyId(key);
+			key0 = key.copy();
+			var abs = h.absolutePos(lower);
+			lock(h.getLevel(), abs, key);
+			player.absSnapTo(abs.getX() + 0.5, abs.getY(), abs.getZ() + 2.5, 180f, 0f);
+			player.setYHeadRot(180f);
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, key);
+			capture(player.createCommandSourceStack(), "key delete all");
+			h.assertFalse(dev.townhall.key.RevokedKeys.get(server).isRevoked(id.get()), "no confirm, nothing happens");
+			h.assertTrue(locked(h.getLevel(), abs) && !player.getMainHandItem().isEmpty(), "no confirm keeps lock and item");
+			capture(player.createCommandSourceStack(), "key delete all confirm");
+			h.assertTrue(player.getMainHandItem().isEmpty(), "key item removed");
+			h.assertFalse(locked(h.getLevel(), abs), "lock freed");
+			// persists through the codec (reload)
+			var encoded = dev.townhall.key.RevokedKeys.CODEC.encodeStart(NbtOps.INSTANCE, dev.townhall.key.RevokedKeys.get(server)).getOrThrow();
+			h.assertTrue(dev.townhall.key.RevokedKeys.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow().isRevoked(id.get()), "revoked id survives reload");
+			// a copy cannot lock again, a lock with the revoked id counts as not locked
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, dev.townhall.key.Keys.copy(key0));
+			useDoor(h, player, lower);
+			h.assertFalse(locked(h.getLevel(), abs), "revoked copy cannot lock");
+			lock(h.getLevel(), abs, dev.townhall.key.Keys.copy(key0));
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), abs).isEmpty(), "stale lock with revoked id is not locked");
+			// a new key works
+			var fresh = dev.townhall.key.Keys.newKey("Neu");
+			player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, fresh);
+			h.assertTrue(useDoor(h, player, lower).consumesAction(), "new key locks the door");
+			h.assertTrue(dev.townhall.key.Keys.lockAt(h.getLevel(), abs).isPresent(), "new lock set");
+		} finally {
+			dev.townhall.key.DoorLocks.get(server).remove(h.getLevel().dimension(), h.absolutePos(lower));
 		}
 		h.succeed();
 	}
@@ -1307,12 +1476,12 @@ public class TownhallGameTests {
 		try {
 			Files.writeString(config.path(), "{ broken by the admin");
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
-			h.assertTrue(out.said("Config not reloaded"), "reload fails: " + out.messages);
+			h.assertTrue(out.said("Konfiguration nicht neu geladen"), "reload fails: " + out.messages);
 			out.messages.clear();
 			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
 			h.assertTrue(Files.readString(config.path()).equals("{ broken by the admin"), "the admin's file is not overwritten");
-			h.assertTrue(out.said("not saved"), "the admin is told it wasn't saved: " + out.messages);
-			h.assertFalse(out.said("Players are AFK after"), "no success message: " + out.messages);
+			h.assertTrue(out.said("nicht gespeichert"), "the admin is told it wasn't saved: " + out.messages);
+			h.assertFalse(out.said("Spieler gelten nach"), "no success message: " + out.messages);
 		} finally {
 			Files.writeString(config.path(), good);
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
@@ -1322,7 +1491,7 @@ public class TownhallGameTests {
 		server.getCommands().performPrefixedCommand(admin, "townhall afktime " + (afk + 1));
 		try {
 			h.assertTrue(Files.readString(config.path()).contains("\"afkMinutes\": " + (afk + 1)), "saved again after a working reload");
-			h.assertFalse(out.said("not saved"), "no warning when saved: " + out.messages);
+			h.assertFalse(out.said("nicht gespeichert"), "no warning when saved: " + out.messages);
 		} finally {
 			server.getCommands().performPrefixedCommand(admin, "townhall afktime " + afk);
 		}
@@ -1347,7 +1516,7 @@ public class TownhallGameTests {
 		try {
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
 			h.assertTrue(config.get().locations.containsKey("a3test"), "reload refused: the location still holds a prisoner");
-			h.assertTrue(out.said("a3test") && out.said("Config not reloaded"), "admin is told why: " + out.messages);
+			h.assertTrue(out.said("a3test") && out.said("Konfiguration nicht neu geladen"), "admin is told why: " + out.messages);
 
 			storage.remove(prisoner);
 			out.messages.clear();
@@ -1528,7 +1697,7 @@ public class TownhallGameTests {
 			out.messages.clear();
 			server.getCommands().performPrefixedCommand(admin, "townhall reload");
 		}
-		h.assertTrue(out.said("reloaded") && !out.said("not reloaded"), "the fixed file loads: " + out.messages);
+		h.assertTrue(out.said("neu geladen") && !out.said("nicht neu geladen"), "the fixed file loads: " + out.messages);
 		h.succeed();
 	}
 
