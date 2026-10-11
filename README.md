@@ -6,7 +6,9 @@ Townhall fasst die Dinge zusammen, für die man sonst mehrere Plugins bräuchte:
 
 Die Mod läuft nur auf dem Server. Spieler joinen mit einem ganz normalen Minecraft-Client und müssen nichts installieren.
 
-Aktuelle Version: **1.15.0**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: **1.16.0**. Was sich wann geändert hat, steht in [CHANGELOG.md](CHANGELOG.md).
+
+Bauhelfer können jetzt Litematica-Schematics in ihrer Bauwelt ohne OP automatisch platzieren. [Einrichtung und Anleitung](docs/LITEMATICA.md), [Prüfbericht](docs/VALIDIERUNG-1.16.0.md).
 
 ---
 
@@ -57,7 +59,7 @@ Frei erstellbare Stadtrollen mit Bürgermeister, Polizei, Händler, Architekt un
 | Regeln pro Welt | Schwierigkeit, PvP, Bauschutz, Hunger, Fallschaden, Mob-Spawn, Feuer, Explosionen und Laubzerfall lassen sich für jede Welt einzeln festlegen. |
 | Zeit und Wetter | Eine Welt kann dauerhaft Tag und trockenes Wetter haben, während die anderen Welten normal weiterlaufen. |
 | Schlafen | Admins legen fest, wie viel Prozent der Spieler schlafen müssen, damit die Nacht vorbei ist (zum Beispiel 50 %). |
-| Bauer | Einzelne Spieler dürfen in einer geschützten Welt bauen, selbst zwischen Creative und Survival wechseln und WorldEdit benutzen. |
+| Bauer | Einzelne Spieler dürfen in einer geschützten Welt bauen, selbst zwischen Creative und Survival wechseln, WorldEdit und Litematica-Command-Paste benutzen. |
 | Türschlösser | Mit einem benannten Schlüssel wird jede Tür abgeschlossen. Schlüssel lassen sich kopieren und weitergeben, Admins haben einen Generalschlüssel. |
 | Nicknamen | Admins vergeben Nicknamen (bis 32 Zeichen, mit Farben). Sie erscheinen im Chat, in der Tab-Liste und über dem Kopf. |
 | AFK und Spielzeit | `[AFK]` in der Tab-Liste nach 5 Minuten Inaktivität, `/playtime` mit Top-10-Bestenliste. |
@@ -290,7 +292,9 @@ Gilt in einer Welt `build false`, dürfen dort normalerweise nur Admins bauen. M
 | `/builder creative` | Bauer | In der eigenen Bauwelt in den Creative-Modus wechseln |
 | `/builder survival` | Bauer | Zurück in Survival |
 
-In seiner Welt darf ein Bauer bauen und abbauen wie ein Admin und WorldEdit benutzen (`//wand`, `//set`, `//copy` und so weiter). Gesperrt bleiben WorldEdit-Befehle für Admins: `/we reload`, `//world`, `/butcher`, `/remove…`, Snapshots, unbegrenzte Limits, CraftScripts (`/cs`), Schematics löschen, `setnbt` und ähnliche. Schematics speichern und laden dürfen Bauer.
+In seiner Welt darf ein Bauer gemäß den Grundstücksfreigaben bauen und abbauen sowie WorldEdit benutzen (`//wand`, `//set`, `//copy` und so weiter). Bei aktivem Grundstücksschutz ist Townhalls WorldEdit-Freigabe gesperrt. Gesperrt bleiben WorldEdit-Befehle für Admins: `/we reload`, `//world`, `/butcher`, `/remove…`, Snapshots, unbegrenzte Limits, CraftScripts (`/cs`), Schematics löschen, `setnbt` und ähnliche. Schematics speichern und laden dürfen Bauer, solange ihre WorldEdit-Freigabe aktiv ist.
+
+Ab 1.16.0 erlaubt dasselbe Bauer-Recht Litematicas `/setblock`- und `/fill`-Paste im Creative-Modus. Auch bei aktivem Grundstücksschutz kann in erlaubten Bereichen eingefügt werden. NBT/Inventare, Entities und Admin-Blöcke gehören nicht zu dieser Freigabe. [Vollständige Anleitung mit Client-Einstellungen und Grenzen](docs/LITEMATICA.md).
 
 Verlässt der Bauer seine Welt durch Teleport oder Tod oder loggt er sich woanders ein, ist er automatisch wieder im Survival-Modus und hat dort kein WorldEdit.
 

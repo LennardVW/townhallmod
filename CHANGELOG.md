@@ -2,6 +2,14 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.16.0 – Litematica für Bauhelfer
+
+- Das vorhandene `/builder`-Recht erlaubt `/setblock` und `/fill` im Creative-Modus, jeweils in der freigegebenen Dimension. Damit funktioniert Litematicas Command-Paste ohne OP.
+- Der komplette Zielbereich wird vor Änderungen geprüft. Fremde Grundstücke, Ladenfässer, Wahlurnen und Blockabbau-Sperren bleiben geschützt; Haft und Onboarding werden berücksichtigt.
+- Begrenzte Ausnahme vom Command-Spam-Zähler für bis zu 64 direkte Paste-Befehle pro Spieler und Tick. Chat und andere Befehle bleiben normal geprüft; zusätzliche Paste-Befehle werden verworfen.
+- Höchstens 32.768 Blöcke je Befehl, keine ungeladenen Zielchunks. NBT-Daten, Entities und Admin-Blöcke benötigen weiterhin einen Admin.
+- Deutsche Einrichtung in `docs/LITEMATICA.md`; vorhandene Bauhelfer und gespeicherte UUIDs bleiben gültig.
+
 ## 1.15.0
 
 - Stadtrollen: Bürgermeister, Polizei, Händler, Architekt und Wahlhelfer sind vorgegeben. Admins können eigene Rollen erstellen, Rechte begrenzen und Mitgliedschaften auch offline vergeben.

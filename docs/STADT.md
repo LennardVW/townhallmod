@@ -77,6 +77,8 @@ Verfügbare Stadtrechte:
 
 Eine Rolle vergibt weder OP noch Minecraft-Befehle, Creative oder WorldEdit. Weitere Rechte müssen bewusst über die dafür vorgesehenen Admin-Befehle vergeben werden.
 
+Das zusätzliche `/builder`-Recht erlaubt ab 1.16.0 auch Litematica-Command-Paste in der freigegebenen Bauwelt. Grundstücksrechte werden dabei geprüft. [Anleitung für Architekten und Bauhelfer](LITEMATICA.md).
+
 ### Bürgermeister und Polizei
 
 ```text

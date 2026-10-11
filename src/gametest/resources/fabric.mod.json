@@ -9,7 +9,7 @@
 		"preLaunch": [
 			"dev.townhall.test.FreshTestRun"
 		],
-		"fabric-gametest": ["dev.townhall.test.TownhallGameTests", "dev.townhall.test.WorldRulesGameTests", "dev.townhall.test.PerformanceGameTests", "dev.townhall.test.CityGameTests", "dev.townhall.test.ElectionGameTests", "dev.townhall.test.ShopGameTests", "dev.townhall.test.AuditGameTests"]
+		"fabric-gametest": ["dev.townhall.test.TownhallGameTests", "dev.townhall.test.WorldRulesGameTests", "dev.townhall.test.PerformanceGameTests", "dev.townhall.test.CityGameTests", "dev.townhall.test.ElectionGameTests", "dev.townhall.test.ShopGameTests", "dev.townhall.test.AuditGameTests", "dev.townhall.test.BuilderSchematicGameTests"]
 	},
 	"mixins": [
 		"townhall-gametest.mixins.json"

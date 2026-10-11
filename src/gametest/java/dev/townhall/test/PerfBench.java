@@ -105,6 +105,30 @@ public class PerfBench {
 
 		List<String> out = new ArrayList<>();
 		out.add("players online: " + online + ", nicknamed: 20, JVM " + Runtime.version());
+		// New paste guard: measure validation only, with initialized chunks and no actual block writes.
+		var configForPaste = TownhallMod.CONFIG.get();
+		String pasteDimension = levelKey.identifier().toString();
+		var oldPasteRules = configForPaste.dimensions.get(pasteDimension);
+		var pasteRules = new TownhallConfig.DimensionRules();
+		pasteRules.builders = new java.util.LinkedHashMap<>(Map.of(viewer.getUUID().toString(), viewer.getGameProfile().name()));
+		configForPaste.dimensions.put(pasteDimension, pasteRules); DimensionSettings.rebuild(configForPaste);
+		viewer.setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+		BlockPos pasteMin = h.absolutePos(new BlockPos(3, 80, 3)), pasteMax = pasteMin.offset(31, 31, 31);
+		for (int cx = pasteMin.getX() >> 4; cx <= pasteMax.getX() >> 4; cx++) for (int cz = pasteMin.getZ() >> 4; cz <= pasteMax.getZ() >> 4; cz++) level.getChunk(cx, cz);
+		var pasteBlock = new net.minecraft.commands.arguments.blocks.BlockInput(Blocks.STONE.defaultBlockState(), java.util.Set.of(), null);
+		var pasteSource = viewer.createCommandSourceStack();
+		try {
+			for (int edge : new int[]{1, 8, 32}) {
+				var box = net.minecraft.world.level.levelgen.structure.BoundingBox.fromCorners(pasteMin, pasteMin.offset(edge - 1, edge - 1, edge - 1));
+				out.add(time("BuilderSchematics.check (" + (edge * edge * edge) + " air blocks)", 3, edge == 32 ? 15 : 500, () -> {
+					try { dev.townhall.protection.BuilderSchematics.check(pasteSource, box, pasteBlock); }
+					catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) { throw new IllegalStateException(e); }
+				}));
+			}
+		} finally {
+			if (oldPasteRules == null) configForPaste.dimensions.remove(pasteDimension); else configForPaste.dimensions.put(pasteDimension, oldPasteRules);
+			DimensionSettings.rebuild(configForPaste);
+		}
 		out.add(time("mixin path: NickPackets.rewrite(non-matching packet)", 2_000_000, () -> sink = NickPackets.rewrite(viewer, motion)));
 		out.add(time("mixin path: NickPackets.rewrite(player info, 60 entries)", 20_000, () -> sink = NickPackets.rewrite(viewer, info)));
 		out.add(time("DimensionSettings.of(dimension)", 2_000_000, () -> sink = DimensionSettings.of(levelKey)));
