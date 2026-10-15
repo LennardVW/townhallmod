@@ -37,6 +37,14 @@ public final class TeleportService {
 	 * @param sentByOther    an operator sent someone else
 	 * @param durationMillis timed stay: sent back automatically after this much online time
 	 */
+	/** True if the player already is at this location (same rule sendTo uses for ALREADY_THERE, without the confinement check). */
+	public static boolean isAlreadyThere(ServerPlayer player, String locationId, TownhallConfig config) {
+		Location location = config.location(locationId).orElseThrow();
+		PlayerState state = ReturnPositionStorage.get(player.level().getServer()).state(player.getUUID());
+		return config.isLocationDimension(player.level().dimension()) && player.level().dimension().equals(location.dimensionKey())
+				&& state.location().map(locationId::equals).orElse(true);
+	}
+
 	public static EnterResult sendTo(ServerPlayer player, String locationId, TownhallConfig config, boolean byOperator, boolean sentByOther,
 			Optional<Long> durationMillis) {
 		Location location = config.location(locationId).orElseThrow();
@@ -46,10 +54,7 @@ public final class TeleportService {
 
 		if (state.confined() && !byOperator) return EnterResult.CONFINED;
 		boolean inLocationWorld = config.isLocationDimension(player.level().dimension());
-		if (inLocationWorld && player.level().dimension().equals(location.dimensionKey())
-				&& state.location().map(locationId::equals).orElse(true) && !sentByOther) {
-			return EnterResult.ALREADY_THERE;
-		}
+		if (!sentByOther && isAlreadyThere(player, locationId, config)) return EnterResult.ALREADY_THERE;
 
 		ServerLevel target = server.getLevel(location.dimensionKey());
 		if (target == null) return EnterResult.UNAVAILABLE;

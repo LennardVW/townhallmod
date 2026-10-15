@@ -161,7 +161,7 @@ public final class Protection {
 	}
 
 	public static boolean mayBuildAt(ServerPlayer player, ServerLevel level, BlockPos pos) {
-		return !CivicSites.protectedAt(level, pos) && PlotService.canBuild(player, level, pos);
+		return !CivicSites.deniesBuild(player, level, pos) && PlotService.canBuild(player, level, pos);
 	}
 
 	public static boolean mayChangeWorld(ServerPlayer player, ServerLevel level, BlockPos pos) {

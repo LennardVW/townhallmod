@@ -29,6 +29,7 @@ public final class ShopCommands {
         var root = Commands.literal("shop").executes(c -> list(c, 1))
             .then(Commands.literal("list").executes(c -> list(c, 1))
                 .then(Commands.argument("page", IntegerArgumentType.integer(1)).executes(c -> list(c, IntegerArgumentType.getInteger(c, "page")))))
+            .then(Commands.literal("signs").executes(ShopCommands::signs))
             .then(Commands.literal("info").then(id().executes(ShopCommands::info)))
             .then(Commands.literal("create").requires(CityAccess::isAdmin).then(id()
                 .then(Commands.argument("owner", GameProfileArgument.gameProfile()).executes(ShopCommands::create))))
@@ -114,6 +115,14 @@ public final class ShopCommands {
         if (!TownhallCommand.saveConfig(c.getSource())) { settings.shopsEnabled = previous; return 0; }
         AuditLog.record(c.getSource(), "shop.enabled", "before=" + previous + " after=" + settings.shopsEnabled);
         return Feedback.okAdmin(c.getSource(), settings.shopsEnabled ? "Spielerläden aktiviert." : "Spielerläden deaktiviert. Werte bleiben geschützt und abholbar.");
+    }
+    private static int signs(CommandContext<CommandSourceStack> c) {
+        if (!(c.getSource().getEntity() instanceof ServerPlayer p)) return Feedback.fail(c.getSource(), "Dieser Befehl benötigt einen Spieler.");
+        var lines = dev.townhall.shop.sign.SignShopService.listFor(p, p.level());
+        if (lines.isEmpty()) return Feedback.ok(c.getSource(), "Du hast keine Schilderläden.");
+        Feedback.ok(c.getSource(), "Deine Schilderläden (" + lines.size() + "):");
+        lines.forEach(l -> Feedback.ok(c.getSource(), l));
+        return lines.size();
     }
     private static int info(CommandContext<CommandSourceStack> c) {
         Shop shop = ShopData.get(c.getSource().getServer()).shop(id(c));

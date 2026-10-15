@@ -80,7 +80,7 @@ public final class TeleportRules {
 	public static boolean begin(ServerPlayer p, Consumer<ServerPlayer> action) {
 		if (Warmup.isWaiting(p)) return false;
 		int secs = TownhallMod.CONFIG.get().teleport.warmupSeconds;
-		if (secs <= 0 || isOp(p)) {
+		if (secs <= 0) {
 			action.accept(p);
 			return true;
 		}
@@ -93,7 +93,7 @@ public final class TeleportRules {
 	}
 
 	public static boolean hasWarmup(ServerPlayer p) {
-		return TownhallMod.CONFIG.get().teleport.warmupSeconds > 0 && !isOp(p);
+		return TownhallMod.CONFIG.get().teleport.warmupSeconds > 0;
 	}
 
 	public static void fail(ServerPlayer p, String message) {

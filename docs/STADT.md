@@ -267,6 +267,34 @@ Die Händlerrolle wird für neue Angebote und Einzahlungen benötigt. Eigentüme
 
 Ein geladener Laden mit echten Gegenständen in seinem Markierungsfass wird nicht einfach gelöscht. Erst die Ursache klären und Werte erhalten. Ein Laden darf höchstens 1728 Warenstücke enthalten; Angebote haben 1 bis 64 Warenstücke, Preise 1 bis 1.000.000 Währungseinheiten.
 
+## Schilderladen
+
+Mit einem Schild an einer Truhe richtet ein Händler einen Laden ein, ganz ohne Befehle. Die Ware und die Einnahmen liegen in der echten Truhe. Der Besitzer kann offline sein.
+
+### Laden einrichten (nur Händler und Admins)
+
+1. Stelle eine Truhe oder ein Fass hin und leg die Ware hinein. Die Ware ist der erste belegte Platz der Truhe.
+2. Bring ein Schild an der Truhe an: als Wandschild an der Truhe oder als Schild direkt darüber.
+3. Schreib auf das Schild:
+
+```text
+[Laden]
+16
+2 Smaragde
+```
+
+Zeile 1 ist `[Laden]` (oder `[Shop]`), Zeile 2 die Menge von 1 bis 64, Zeile 3 der Preis als Zahl mit `Smaragd`, `Smaragde`, `Diamant` oder `Diamanten` (auch `emerald` und `diamond`), höchstens 2304. Der Server formatiert das Schild neu, zum Beispiel `[Laden]` / `16x Oak Log` / `2 Smaragde` / dein Name, und wachst es, damit es sich nicht mehr ändern lässt. Bei einer falschen Eingabe oder einer leeren Truhe bekommst du eine rote Meldung und das Schild bleibt ein normales Schild.
+
+### Kaufen
+
+Rechtsklick auf das Ladenschild. Du brauchst genug unveränderte Smaragde oder Diamanten im Inventar und Platz für die Ware. Bezahlt wird direkt in die Ladentruhe, die Ware kommt aus der Truhe. Ein Klick ist ein Kauf. Im Kreativmodus kannst du nichts kaufen, auch Operatoren nicht. Fehlt etwas, bekommst du eine Meldung und es ändert sich nichts: „Du hast nicht genug Smaragde (2 nötig).“, „Der Laden ist ausverkauft.“, „Die Ladentruhe ist voll, sag dem Besitzer Bescheid.“ oder „Dein Inventar ist voll.“. Der Besitzer bekommt eine Nachricht, wenn er online ist. Klickt der Besitzer selbst, sieht er Bestand und Einnahmen in der Truhe.
+
+### Schutz
+
+Nur der Besitzer kann die Ladentruhe öffnen (Admins dürfen sie öffnen) und abbauen. Beide Hälften einer Doppeltruhe sind geschützt, und Fremde können keine Truhe daneben so anbauen, dass sie sich mit ihr verbindet. Trichter, Werfer, Explosionen, Kolben, Feuer und Flüssigkeiten ändern nichts an Truhe und Schild; Trichter sind komplett gesperrt. Das Schild baut nur der Besitzer oder ein Admin ab. Baut der Besitzer Schild oder Truhe ab, ist der Laden weg.
+
+`/shop signs` listet deine Schilderläden mit Ort, Ware und Bestand. Dieselben Spielerläden-Einstellungen (`shopsEnabled`) gelten auch hier. Gespeichert wird in `sign_shops.dat`.
+
 ## Grundstücke bei Bedarf einschalten
 
 Standardmäßig ist `city.claimsEnabled` false. Ihr könnt zunächst frei bauen und später nur Rathaus, Geschäfte oder einzelne Häuser schützen. Vorbereitete Grundstücke wirken erst nach dem Einschalten.
@@ -396,6 +424,7 @@ Die Definitionen und Spielerdaten werden mit der Minecraft-Welt gespeichert:
 | `plots.dat` | Grundstücke, Eigentümer, Mitbauer und Rollenfreigaben |
 | `elections.dat` | Wahlen, Registrierung, anonyme Buchseiten und Handzählung |
 | `shops.dat` | Eigentümer, Angebote, Bestand und Einnahmen |
+| `sign_shops.dat` | Schilderläden: Schild- und Truhenort, Besitzer, Ware, Preis |
 | `audit.dat` | Begrenztes Änderungsprotokoll |
 
 Für ein Update: Server sauber stoppen, Welt und `config/` sichern, die alte Townhall-Jar ersetzen, neu starten. Es darf nur eine Townhall-Jar in `mods/` liegen. Die Mod nutzt Minecraft-Autosave und den normalen Shutdown; ein harter Prozessabbruch zwischen zwei Speicherungen ist keine garantierte Transaktion zwischen Welt-, Laden- und Spielerdateien.

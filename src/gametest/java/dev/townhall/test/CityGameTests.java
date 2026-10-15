@@ -477,7 +477,9 @@ public class CityGameTests {
 			r=PlotEnterTracker.update(guest);
 			h.assertTrue(r.kind()==PlotEnterTracker.Kind.LEAVE&&r.id().equals(b),"leaving is reported");
 			owner.setPos(pa.getX()+0.5,pa.getY(),pa.getZ()+0.5);
-			h.assertTrue(PlotEnterTracker.update(owner).kind()==PlotEnterTracker.Kind.NONE,"owner gets no message");
+			var own=PlotEnterTracker.update(owner);
+			h.assertTrue(own.kind()==PlotEnterTracker.Kind.ENTER,"owner sees his own plot too");
+			h.assertTrue(PlotEnterTracker.texts(owner.level().getServer(),own,owner.getUUID())[1].contains("Dein Grundstück"),"own plot text");
 		} finally { config.city.claimsEnabled=enabled;plots.remove(a);plots.remove(b);PlotEnterTracker.reset(); }
 		h.succeed();
 	}

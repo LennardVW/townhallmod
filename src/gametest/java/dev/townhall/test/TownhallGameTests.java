@@ -7,6 +7,7 @@ import dev.townhall.command.TownhallCommand;
 import dev.townhall.storage.PlayerState;
 import dev.townhall.storage.ReturnLocation;
 import dev.townhall.teleport.ConfinementService;
+import dev.townhall.teleport.ReturnFreeze;
 import dev.townhall.onboarding.Onboarding;
 import dev.townhall.onboarding.OnboardingStorage;
 import dev.townhall.protection.Protection;
@@ -155,22 +156,37 @@ public class TownhallGameTests {
 		});
 	}
 
-	@GameTest
-	public void returnFreezeSkippedForOpsAndWhenOff(GameTestHelper h) {
+	@GameTest(maxTicks = 100)
+	public void returnFreezeAlsoHoldsOpsAndIsOffAtZero(GameTestHelper h) {
 		ServerPlayer p = playerOnFloor(h, new Vec3(2.5, 1, 2.5), 0f, 0f);
 		Level home = p.level();
 		Vec3 start = p.position();
-		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 3;
-		try {
-			opAt(p, "townhall send @s");
-			opAt(p, "townhall return");
-			assertAt(h, p, home, start, 0f, 0f);
+		opAt(p, "townhall send @s");
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 1;
+		opAt(p, "townhall return");
+		h.assertTrue(inTownhall(p) && ReturnFreeze.isWaiting(p), "ops wait for the countdown too");
+		h.runAfterDelay(30, () -> {
 			TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0;
+			assertAt(h, p, home, start, 0f, 0f);
 			run(p, "townhall");
 			run(p, "townhall return");
 			assertAt(h, p, home, start, 0f, 0f);
-		} finally { TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0; }
-		h.succeed();
+			h.succeed();
+		});
+	}
+
+	@GameTest(maxTicks = 100)
+	public void enteringALocationCountsDownForOpsToo(GameTestHelper h) {
+		ServerPlayer p = playerOnFloor(h, new Vec3(3.5, 1, 3.5), 0f, 0f);
+		TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 1;
+		opAt(p, "townhall");
+		h.assertFalse(inTownhall(p), "not teleported at once");
+		h.assertTrue(ReturnFreeze.isWaiting(p), "countdown running");
+		h.runAfterDelay(30, () -> {
+			TownhallMod.CONFIG.get().returnSettings.returnFreezeSeconds = 0;
+			h.assertTrue(inTownhall(p), "arrived after the countdown");
+			h.succeed();
+		});
 	}
 
 	@GameTest
