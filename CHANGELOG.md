@@ -2,6 +2,12 @@
 
 Versionen: **x.y.z** – `x` große Umbauten, `y` neue Funktionen, `z` Fehlerbehebungen.
 
+## 1.19.1 – Stumme Namen
+
+- Neu: Ein Namensschild (oder Befehl) mit einem Namen aus `mobs.silentNames` macht ein Lebewesen still, Standard: „halts maul“, „halt die schnauze“, „psst“, „leise“. Groß-/Kleinschreibung und überzählige Leerzeichen zählen nicht; Spieler sind ausgenommen. Eine leere Liste schaltet die Funktion aus.
+- Wird das Tier danach anders benannt oder verliert den Namen, ist es wieder laut, aber nur, wenn die Mod es still gemacht hat (Merker-Tag `townhall_silenced`). Vorher stumme Tiere bleiben stumm.
+- `/townhall silentnames` zeigt die Liste, `add <name>` und `remove <name>` ändern und speichern sie. Bereits benannte Tiere werden nicht rückwirkend geändert.
+
 ## 1.19.0 – Schilderläden
 
 - Neu: Läden ohne Befehle. Ein Händler legt die Ware in eine Truhe oder ein Fass, bringt ein Schild an der Truhe an (Wandschild oder direkt darüber) und schreibt `[Laden]`, die Menge (1–64) und den Preis (`2 Smaragde`, `1 Diamant`) darauf. Der Server formatiert und wachst das Schild; bei Fehlern (leere Truhe, falsche Zeile) bleibt es ein normales Schild.

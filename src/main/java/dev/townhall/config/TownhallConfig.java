@@ -46,6 +46,7 @@ public final class TownhallConfig {
 	public int afkMinutes = 5;
 	public JoinMessages joinMessages = new JoinMessages();
 	public TabList tabList = new TabList();
+	public Mobs mobs = new Mobs();
 	public dev.townhall.city.CitySettings city = new dev.townhall.city.CitySettings();
 
 	/** Own join/leave messages; {player} = name (nickname if set), &-colors. Empty text = no message. */
@@ -56,6 +57,14 @@ public final class TownhallConfig {
 		public String firstJoin = "&6&l★ &e{player} &6ist zum ersten Mal auf AzubiCraft! Herzlich willkommen!";
 		/** Personal join messages: player UUID → text. */
 		public Map<String, String> players = new LinkedHashMap<>();
+	}
+
+	/** Settings for living entities (not players). */
+	public static final class Mobs {
+		public static final int MAX_SILENT_NAMES = 50;
+		public static final int MAX_SILENT_NAME_LENGTH = 64;
+		/** A name tag / command name from this list (ignoring case and extra spaces) makes the creature silent. Empty = off. */
+		public List<String> silentNames = new ArrayList<>(List.of("halts maul", "halt die schnauze", "psst", "leise"));
 	}
 
 	/** Tab list header/footer lines. Placeholders: {player} {online} {max} {ping} {playtime} {world}. */
@@ -474,6 +483,14 @@ public final class TownhallConfig {
 		if (joinMessages == null || joinMessages.players == null) errors.add("joinMessages fehlt");
 		if (tabList == null || tabList.header == null || tabList.footer == null) errors.add("tabList.header/footer müssen Listen sein");
 		if (afkMinutes < 0) errors.add("afkMinutes muss >= 0 sein");
+		if (mobs == null || mobs.silentNames == null) errors.add("mobs.silentNames fehlt");
+		else if (hasNullText(mobs.silentNames)) errors.add("mobs.silentNames darf keine leeren Einträge (null) enthalten");
+		else {
+			if (mobs.silentNames.size() > Mobs.MAX_SILENT_NAMES) errors.add("mobs.silentNames darf höchstens " + Mobs.MAX_SILENT_NAMES + " Namen enthalten");
+			if (mobs.silentNames.stream().anyMatch(n -> n.length() > Mobs.MAX_SILENT_NAME_LENGTH)) {
+				errors.add("mobs.silentNames: jeder Name darf höchstens " + Mobs.MAX_SILENT_NAME_LENGTH + " Zeichen haben");
+			}
+		}
 		if (city == null) errors.add("city fehlt");
 		else city.validate(errors);
 		return errors;

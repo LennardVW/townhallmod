@@ -70,6 +70,7 @@ Frei erstellbare Stadtrollen mit Bürgermeister, Polizei, Händler, Architekt un
 | Schilderläden | Schild `[Laden]` an einer Truhe, Kauf per Rechtsklick, Bezahlung und Ware direkt in der Truhe, siehe `docs/STADT.md`. |
 | Grundstücke | Optionaler Schutz. Spieler claimen und verwalten ihr Grundstück selbst (Chunk-Kontingent, Miteigentümer, Manager, Mitbauer); `/plot help` zeigt die Befehle. Rollen lassen sich ausdrücklich zulassen. |
 | Protokoll | Admin-Abfragen zu erfolgreichen Block- und Verwaltungsänderungen; begrenzte Speicherung. |
+| Stumme Namen | Ein Namensschild (oder Befehl) mit einem Namen wie „Halts Maul“ macht ein Lebewesen still; andere Namen machen es wieder laut, aber nur, wenn die Mod es still gemacht hat. |
 | Onboarding | Neue Spieler sehen beim ersten Join Begrüßung, Tutorial und Regeln und müssen die Regeln akzeptieren, bevor sie spielen können. |
 
 Alle Admin-Einstellungen lassen sich im Spiel per Befehl ändern. Sie gelten sofort, ohne `/reload` und ohne Neustart.
@@ -379,6 +380,16 @@ Platzhalter für Kopf- und Fußzeile: `{player}`, `{online}`, `{max}`, `{ping}`,
 
 Die Tab-Liste kann neben dem Namen nur eine Zahl zeigen. Nutzt du dort schon eine eigene Scoreboard-Anzeige (`/scoreboard objectives setdisplay list ...`), ersetzt die Mod sie beim Start. In dem Fall `/townhall deathsintab off` eingeben.
 
+### Stumme Namen
+
+Wer ein Tier, Monster oder einen Dorfbewohner (jedes Lebewesen, keine Spieler) mit einem Namensschild oder per Befehl so nennt, wie es in der Liste `mobs.silentNames` steht, macht es still. Groß- und Kleinschreibung, Leerzeichen am Rand und doppelte Leerzeichen zählen nicht. Standard: `halts maul`, `halt die schnauze`, `psst`, `leise`. Ein anderer Name oder das Entfernen des Namens macht das Tier wieder laut, aber nur, wenn die Mod es still gemacht hat (Merker-Tag `townhall_silenced`). Tiere, die schon vorher still waren (Befehl, andere Mod), bleiben still. Die Änderung der Liste wirkt nicht rückwirkend: bereits benannte Tiere bleiben, wie sie sind; erst beim nächsten Benennen gilt die neue Liste.
+
+| Befehl | Was er macht |
+|---|---|
+| `/townhall silentnames` | Liste der stummen Namen anzeigen |
+| `/townhall silentnames add <name>` | Name hinzufügen (mehrere Wörter erlaubt, höchstens 50 Namen mit je 64 Zeichen) |
+| `/townhall silentnames remove <name>` | Name entfernen; eine leere Liste schaltet die Funktion aus |
+
 ### Begrüßung und Regeln beim ersten Join
 
 Texte, Regeln und Verhalten stehen in der Config unter `onboarding`. Ändern sich die Regeln, erhöhst du `onboarding.rulesVersion`. Dann müssen alle Spieler sie beim nächsten Join neu akzeptieren. Schaltest du `onboarding.enabled` aus oder senkst die Version (danach `/townhall reload`), sind wartende Spieler sofort frei.
@@ -431,6 +442,7 @@ Solange die Datei fehlerhaft ist (beim Start oder nach einem missglückten `/tow
 | `dimensions` | leer | Regeln pro Welt, siehe oben |
 | `deathsInTab` | `true` | Rote Todeszahl in der Tab-Liste |
 | `endEnabled` | `false` | `false` sperrt Endportale (Betreten des Endes), `/townhall end on` öffnet sie |
+| `mobs.silentNames` | `halts maul`, `halt die schnauze`, `psst`, `leise` | Namen, die ein Lebewesen still machen (leere Liste = aus, höchstens 50 Namen, je 64 Zeichen) |
 | `afkMinutes` | `5` | Minuten bis AFK, `0` nur manuell |
 | `joinMessages.*` | AzubiCraft-Texte | Join-, Leave- und Erstjoin-Nachrichten, eigene Nachrichten pro Spieler |
 | `tabList.*` | AzubiCraft-Kopf- und Fußzeile | Zeilen mit Platzhaltern |
@@ -522,7 +534,7 @@ Server stoppen, die alte Townhall-Jar aus `mods/` löschen, die neue hineinlegen
 | Bauer | `/builder add <welt> <spieler>`, `/builder remove <welt> <spieler>`, `/builder list [welt]` |
 | Schlüssel | `/key admin`, `/key unlock` |
 | Nicknamen | `/nick set <spieler> <nick>`, `/nick reset <spieler>`, `/nick list` |
-| Anzeige | `/joinmessage ...`, `/tablist ...`, `/townhall deathsintab on\|off`, `/townhall end on\|off`, `/townhall afktime <minuten>` |
+| Anzeige | `/joinmessage ...`, `/tablist ...`, `/townhall deathsintab on\|off`, `/townhall silentnames [add\|remove <name>]`, `/townhall end on\|off`, `/townhall afktime <minuten>` |
 | Regeln | `/rules reset <spieler>` |
 
 ---

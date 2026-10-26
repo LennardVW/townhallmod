@@ -67,7 +67,8 @@
 		"ShopExplosionMixin",
 		"ShopHopperMixin",
 		"ShopPistonMixin",
-		"SignShopSignMixin"
+		"SignShopSignMixin",
+		"EntityCustomNameMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
