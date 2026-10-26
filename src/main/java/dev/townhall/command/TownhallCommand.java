@@ -2,6 +2,7 @@ package dev.townhall.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -43,6 +44,7 @@ import java.util.function.Predicate;
 
 import static dev.townhall.command.Feedback.fail;
 import static dev.townhall.command.Feedback.ok;
+import static dev.townhall.command.Feedback.okAdmin;
 
 /**
  * One root command per configured location, e.g. /townhall and /gefaengnis:
@@ -173,6 +175,9 @@ public final class TownhallCommand {
 				.then(Commands.literal("deathsintab").requires(op)
 						.then(Commands.literal("on").executes(ctx -> setDeathsInTab(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setDeathsInTab(ctx, false))))
+				.then(Commands.literal("silentnames").requires(op).executes(TownhallCommand::showSilentNames)
+						.then(Commands.literal("add").then(Commands.argument("name", StringArgumentType.greedyString()).executes(TownhallCommand::addSilentName)))
+						.then(Commands.literal("remove").then(Commands.argument("name", StringArgumentType.greedyString()).executes(TownhallCommand::removeSilentName))))
 				.then(Commands.literal("end").requires(op).executes(TownhallCommand::showEnd)
 						.then(Commands.literal("on").executes(ctx -> setEnd(ctx, true)))
 						.then(Commands.literal("off").executes(ctx -> setEnd(ctx, false))))
@@ -342,6 +347,41 @@ public final class TownhallCommand {
 		return ok(ctx.getSource(), TownhallMod.CONFIG.get().endEnabled
 				? "Das End ist offen: Endportale funktionieren."
 				: "Das End ist geschlossen: Endportale tun nichts. Operatoren können weiter per /tp hin, der Rückweg funktioniert.");
+	}
+
+	private static int showSilentNames(CommandContext<CommandSourceStack> ctx) {
+		List<String> names = TownhallMod.CONFIG.get().mobs.silentNames;
+		if (names.isEmpty()) return ok(ctx.getSource(), "Keine stummen Namen eingestellt: Namensschilder machen Tiere nicht still.");
+		return ok(ctx.getSource(), "Stumme Namen (" + names.size() + "): " + String.join(", ", names)
+				+ ". Wer so benannt wird, gibt keine Geräusche mehr von sich.");
+	}
+
+	private static int addSilentName(CommandContext<CommandSourceStack> ctx) {
+		var source = ctx.getSource();
+		String name = dev.townhall.display.SilentNames.normalize(StringArgumentType.getString(ctx, "name"));
+		TownhallConfig.Mobs mobs = TownhallMod.CONFIG.get().mobs;
+		if (name.isEmpty()) return fail(source, "Der Name darf nicht leer sein.");
+		if (name.length() > TownhallConfig.Mobs.MAX_SILENT_NAME_LENGTH) return fail(source, "Der Name darf höchstens " + TownhallConfig.Mobs.MAX_SILENT_NAME_LENGTH + " Zeichen lang sein.");
+		if (dev.townhall.display.SilentNames.matches(name, mobs.silentNames)) return fail(source, "'" + name + "' steht schon in der Liste.");
+		if (mobs.silentNames.size() >= TownhallConfig.Mobs.MAX_SILENT_NAMES) return fail(source, "Die Liste ist voll (höchstens " + TownhallConfig.Mobs.MAX_SILENT_NAMES + " Namen).");
+		List<String> next = new ArrayList<>(mobs.silentNames);
+		next.add(name);
+		mobs.silentNames = next;
+		if (!saveConfig(source)) return 0;
+		return okAdmin(source, "'" + name + "' macht Tiere ab jetzt still. Bereits benannte Tiere bleiben unverändert.");
+	}
+
+	private static int removeSilentName(CommandContext<CommandSourceStack> ctx) {
+		var source = ctx.getSource();
+		String name = dev.townhall.display.SilentNames.normalize(StringArgumentType.getString(ctx, "name"));
+		TownhallConfig.Mobs mobs = TownhallMod.CONFIG.get().mobs;
+		List<String> next = new ArrayList<>(mobs.silentNames);
+		if (!next.removeIf(entry -> dev.townhall.display.SilentNames.normalize(entry).equals(name))) {
+			return fail(source, "'" + name + "' steht nicht in der Liste.");
+		}
+		mobs.silentNames = next;
+		if (!saveConfig(source)) return 0;
+		return okAdmin(source, "'" + name + "' macht Tiere nicht mehr still. Bereits stumme Tiere bleiben unverändert.");
 	}
 
 	private static int setDeathsInTab(CommandContext<CommandSourceStack> ctx, boolean on) {
